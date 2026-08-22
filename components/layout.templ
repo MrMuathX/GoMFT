@@ -41,13 +41,111 @@ templ Layout(title string) {
 	@LayoutWithContext(title, context.Background())
 }
 
+// navItems renders the primary navigation. Used by both the desktop sidebar
+// and the mobile drawer so the two can never drift apart.
+templ navItems(ctx context.Context, suffix string) {
+	<p class="gm-eyebrow px-2.5 pt-2 pb-1">Operations</p>
+	<a href="/dashboard" class="gm-nav-link">
+		<i class="fas fa-chart-pie" aria-hidden="true"></i>
+		Dashboard
+	</a>
+	<a href="/configs" class="gm-nav-link">
+		<i class="fas fa-exchange-alt" aria-hidden="true"></i>
+		Transfer Configurations
+	</a>
+	<a href="/jobs" class="gm-nav-link">
+		<i class="fas fa-calendar-alt" aria-hidden="true"></i>
+		Scheduled Jobs
+	</a>
+	<a href="/history" class="gm-nav-link">
+		<i class="fas fa-history" aria-hidden="true"></i>
+		Transfer History
+	</a>
+	<a href="/files" class="gm-nav-link">
+		<i class="fas fa-file-alt" aria-hidden="true"></i>
+		Files
+	</a>
+	if isAdmin(ctx) {
+		<p class="gm-eyebrow px-2.5 pt-4 pb-1">Administration</p>
+		<a href="/admin/users" class="gm-nav-link">
+			<i class="fas fa-users" aria-hidden="true"></i>
+			User Management
+		</a>
+		<a href="/admin/roles" class="gm-nav-link">
+			<i class="fas fa-user-shield" aria-hidden="true"></i>
+			Role Management
+		</a>
+		<a href="/admin/audit" class="gm-nav-link">
+			<i class="fas fa-clipboard-list" aria-hidden="true"></i>
+			Audit Logs
+		</a>
+		<a href="/admin/logs" class="gm-nav-link">
+			<i class="fas fa-stream" aria-hidden="true"></i>
+			Log Viewer
+		</a>
+		<a href="/admin/database" class="gm-nav-link">
+			<i class="fas fa-database" aria-hidden="true"></i>
+			Database Tools
+		</a>
+		<button
+			type="button"
+			class="gm-nav-link w-full"
+			aria-controls={ "dropdown-settings" + suffix }
+			aria-expanded="false"
+			data-collapse-toggle={ "dropdown-settings" + suffix }
+		>
+			<i class="fas fa-cog" aria-hidden="true"></i>
+			<span class="flex-1 text-left">Settings</span>
+			<svg class="w-3 h-3 flex-none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+				<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"></path>
+			</svg>
+		</button>
+		<ul id={ "dropdown-settings" + suffix } class="hidden space-y-0.5 pl-3">
+			<li>
+				<a href="/admin/settings/auth-providers" class="gm-nav-link">
+					<i class="fas fa-user-lock" aria-hidden="true"></i>
+					Authentication Providers
+				</a>
+			</li>
+			<li>
+				<a href="/admin/settings/notifications" class="gm-nav-link">
+					<i class="fas fa-bell" aria-hidden="true"></i>
+					Notification Services
+				</a>
+			</li>
+		</ul>
+	}
+}
+
+templ siteFooter() {
+	<footer class="gm-border-t">
+		<div class="max-w-screen-2xl mx-auto py-3 px-4 sm:px-6 lg:px-8">
+			<div class="flex items-center justify-between gap-4 gm-muted">
+				<span class="num">GoMFT &copy; { getCurrentYear() }</span>
+				<div class="flex items-center gap-1">
+					<a href="https://github.com/starfleetcptn/gomft" class="gm-icon-btn" aria-label="GoMFT on GitHub">
+						<i class="fab fa-github" aria-hidden="true"></i>
+					</a>
+					<a href="https://discord.gg/f9dwtM3j" class="gm-icon-btn" target="_blank" rel="noopener" aria-label="GoMFT Discord">
+						<i class="fab fa-discord" aria-hidden="true"></i>
+					</a>
+					<a href={ GetReleaseURL() } class="gm-btn gm-btn-ghost gm-btn-sm" aria-label={ "Release " + AppVersion }>
+						<i class="fas fa-tag" aria-hidden="true"></i>
+						<span class="num">{ AppVersion }</span>
+					</a>
+				</div>
+			</div>
+		</div>
+	</footer>
+}
+
 templ LayoutWithContext(title string, ctx context.Context) {
 	<!DOCTYPE html>
-	<html lang="en" class="h-full bg-gray-50 dark:bg-gray-900">
+	<html lang="en" class="h-full">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-			<meta name="theme-color" content="#2563eb"/>
+			<meta name="theme-color" content="#0f1115"/>
 			<meta name="apple-mobile-web-app-capable" content="yes"/>
 			<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 			<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png"/>
@@ -60,348 +158,124 @@ templ LayoutWithContext(title string, ctx context.Context) {
 			<!-- Application assets -->
 			<link rel="stylesheet" href="/static/dist/app.css"/>
 			<link rel="stylesheet" href="https://rsms.me/inter/inter.css"/>
-
 			<script>
-				// Immediate theme application
-				// This script runs before the DOM is fully loaded
+				// Dark-first: dark is the default unless the user has explicitly
+				// chosen light. Applied before paint to avoid a flash.
 				(function() {
-					const isDark = localStorage.theme === 'dark' || 
-						(!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
-					
-					if (isDark) {
+					var isLight = localStorage.theme === 'light';
+					if (!isLight) {
 						document.documentElement.classList.add('dark');
-						document.addEventListener('DOMContentLoaded', function() {
-							document.body.classList.add('dark');
-							
-							// Apply dark theme to containers
-							const containers = ['jobs-container', 'configs-container'];
-							containers.forEach(function(id) {
-								const container = document.getElementById(id);
-								if (container) {
-									container.classList.add('dark');
-									container.style.backgroundColor = '#111827';
-								}
-							});
-						});
 					}
 				})();
 			</script>
-			<style>
-				html, body {
-					margin: 0;
-					padding: 0;
-					overflow-x: hidden;
-					width: 100%;
-				}
-				
-				@keyframes fadeIn {
-					from { opacity: 0; }
-					to { opacity: 1; }
-				}
-				
-				.animate-fadeIn {
-					animation: fadeIn 0.3s ease-in-out;
-				}
-				
-				.pb-mobile-nav {
-					padding-bottom: 4rem;
-				}
-				
-				@media (min-width: 640px) {
-					.pb-mobile-nav {
-						padding-bottom: 0;
-					}
-				}
-				
-				/* Ensure dark mode background extends to full height */
-				body.dark {
-					background-color: #111827; /* gray-900 */
-				}
-				
-				/* Force dark background on specific pages */
-				body.dark .configs-page, 
-				body.dark .jobs-page {
-					background-color: #111827 !important; /* gray-900 */
-					min-height: 100vh;
-				}
-				
-				/* Ensure dark mode fills entire page */
-				body.dark {
-					background-color: #111827 !important;
-				}
-				
-				/* Force container backgrounds */
-				#jobs-container.dark, #configs-container.dark {
-					background-color: #111827 !important;
-					min-height: 100vh;
-				}
-				
-				/* Override any white backgrounds in dark mode */
-				body.dark .bg-white {
-					background-color: #1f2937 !important;
-				}
-			</style>
 		</head>
-		<body class="min-h-full bg-gray-50 dark:bg-gray-900" style="min-height: 100vh; display: flex; flex-direction: column;" hx-on::after-swap="initFlowbite()">
+		<body class="min-h-full gm-app" style="min-height:100vh;display:flex;flex-direction:column;" hx-on::after-swap="initFlowbite()">
+			<a href="#main-content" class="skip-link">Skip to main content</a>
 			if isLoggedIn(ctx) {
 				<!-- Application Shell -->
-				<div class="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+				<div class="gm-shell flex min-h-screen gm-app">
 					<!-- Desktop Sidebar -->
-					<aside class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
-						<div class="flex flex-col flex-grow pt-5 bg-white dark:bg-gray-800 overflow-y-auto border-r border-gray-200 dark:border-gray-700">
-							<div class="flex items-center flex-shrink-0 px-4">
-								<a href="/" class="flex items-center text-xl font-bold text-primary-600 dark:text-primary-400">
-									<img src="/static/img/logo.png" alt="GoMFT" class="w-8 h-8 mr-2">
+					<aside class="gm-sidebar hidden md:flex md:w-64 md:flex-col gm-panel gm-border-r z-20" aria-label="Primary">
+						<div class="gm-sidebar-inner flex flex-col w-full">
+							<div class="flex items-center flex-shrink-0 px-4 h-14 gm-border-b">
+								<a href="/" class="flex items-center gap-2 text-base font-semibold" style="color:var(--text-1)">
+									<img src="/static/img/logo.png" alt="" class="w-6 h-6"/>
 									GoMFT
 								</a>
 							</div>
-							<nav class="flex-1 px-2 py-4 bg-white dark:bg-gray-800">
-								<div class="space-y-1">
-									<a href="/dashboard" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-chart-pie mr-3 text-gray-500 dark:text-gray-400"></i>
-										Dashboard
-									</a>
-									<a href="/configs" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-exchange-alt mr-3 text-gray-500 dark:text-gray-400"></i>
-										Transfer Configurations
-									</a>
-									<a href="/jobs" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-calendar-alt mr-3 text-gray-500 dark:text-gray-400"></i>
-										Scheduled Jobs
-									</a>
-									<a href="/history" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-history mr-3 text-gray-500 dark:text-gray-400"></i>
-										Transfer History
-									</a>
-									<a href="/files" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-file-alt mr-3 text-gray-500 dark:text-gray-400"></i>
-										Files
-									</a>
-									if isAdmin(ctx) {
-										<p class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-											Administration
-										</p>
-										<a href="/admin/users" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-											<i class="fas fa-users w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-											User Management
-										</a>
-										<a href="/admin/roles" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-											<i class="fas fa-user-shield w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-											Role Management
-										</a>
-										<a href="/admin/audit" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-											<i class="fas fa-clipboard-list w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-											Audit Logs
-										</a>
-										<a href="/admin/logs" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-											<i class="fas fa-stream w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-											Log Viewer
-										</a>
-										<a href="/admin/database" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-											<i class="fas fa-database w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-											Database Tools
-										</a>
-										// Settings Dropdown
-										<button type="button" class="flex items-center w-full p-2 text-base text-gray-900 transition duration-75 rounded-lg group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" aria-controls="dropdown-settings" data-collapse-toggle="dropdown-settings">
-											<i class="fas fa-cog w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-											<span class="flex-1 ms-3 text-left rtl:text-right whitespace-nowrap">Settings</span>
-											<svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
-												<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
-											</svg>
-										</button>
-										<ul id="dropdown-settings" class="hidden py-2 space-y-2">
-											// <li>
-											// 	<a href="#" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">General (Coming Soon)</a>
-											// </li>
-											<li>
-												<a href="/admin/settings/auth-providers" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-													<i class="fas fa-user-lock w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-													Authentication Providers
-												</a>
-											</li>
-											<li>
-												<a href="/admin/settings/notifications" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-													<i class="fas fa-bell w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-													Notification Services
-												</a>
-											</li>
-										</ul>
-									}
-								</div>
+							<nav class="flex-1 px-2 py-3 space-y-0.5">
+								@navItems(ctx, "")
 							</nav>
 						</div>
 					</aside>
-					<!-- Mobile menu -->
-					<div class="md:hidden fixed top-0 z-30 w-full">
-						<div class="bg-white dark:bg-gray-800 shadow-sm">
-							<div class="flex items-center justify-between px-4 py-3">
-								<a href="/" class="flex items-center text-primary-600 dark:text-primary-400">
-									<i class="fas fa-exchange-alt text-xl"></i>
-								</a>
-								<div class="flex items-center space-x-3">
-									<button data-drawer-target="mobile-menu" data-drawer-toggle="mobile-menu" class="p-2 text-gray-500 rounded-lg hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">
-										<i class="fas fa-bars text-lg"></i>
-									</button>
-								</div>
-							</div>
-						</div>
-					</div>
-					<!-- Add this drawer element for mobile menu -->
-					<div id="mobile-menu" class="fixed top-0 left-0 z-40 h-screen p-4 overflow-y-auto transition-transform -translate-x-full bg-white w-64 dark:bg-gray-800" tabindex="-1">
-						<div class="flex items-center justify-between">
-							<a href="/" class="flex items-center text-xl font-bold text-primary-600 dark:text-primary-400">
-								<!-- GoMFT Logo -->
-								<img src="/static/img/logo.png" alt="GoMFT" class="w-8 h-8 mr-2">
+					<!-- Mobile top bar -->
+					<div class="md:hidden fixed top-0 z-30 w-full gm-panel gm-border-b">
+						<div class="flex items-center justify-between px-3 h-14">
+							<a href="/" class="flex items-center gap-2 text-sm font-semibold" style="color:var(--text-1)">
+								<img src="/static/img/logo.png" alt="" class="w-6 h-6"/>
+								GoMFT
 							</a>
-							<button type="button" data-drawer-hide="mobile-menu" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white">
-								<i class="fas fa-times"></i>
+							<button
+								data-drawer-target="mobile-menu"
+								data-drawer-toggle="mobile-menu"
+								class="gm-icon-btn"
+								aria-label="Open navigation menu"
+								aria-controls="mobile-menu"
+							>
+								<i class="fas fa-bars text-lg" aria-hidden="true"></i>
 							</button>
 						</div>
-						<!-- Copy the same navigation items from the desktop sidebar -->
-						<nav class="mt-5">
-							<div class="space-y-1">
-								<!-- Copy the same links from the desktop sidebar -->
-								<a href="/dashboard" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-									<i class="fas fa-chart-pie mr-3 text-gray-500 dark:text-gray-400"></i>
-									Dashboard
-								</a>
-								<a href="/configs" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-									<i class="fas fa-exchange-alt mr-3 text-gray-500 dark:text-gray-400"></i>
-									Transfer Configurations
-								</a>
-								<a href="/jobs" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-									<i class="fas fa-calendar-alt mr-3 text-gray-500 dark:text-gray-400"></i>
-									Scheduled Jobs
-								</a>
-								<a href="/history" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-									<i class="fas fa-history mr-3 text-gray-500 dark:text-gray-400"></i>
-									Transfer History
-								</a>
-								<a href="/files" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-									<i class="fas fa-file-alt mr-3 text-gray-500 dark:text-gray-400"></i>
-									Files
-								</a>
-								if isAdmin(ctx) {
-									<p class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-										Administration
-									</p>
-									<a href="/admin/users" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-users w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-										User Management
-									</a>
-									<a href="/admin/roles" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-user-shield w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-										Role Management
-									</a>
-									<a href="/admin/audit" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-clipboard-list w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-										Audit Logs
-									</a>
-									<a href="/admin/logs" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-stream w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-										Log Viewer
-									</a>
-									<a href="/admin/database" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-										<i class="fas fa-database w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-										Database Tools
-									</a>
-									// Settings Dropdown
-									<button type="button" class="flex items-center w-full p-2 text-base text-gray-900 transition duration-75 rounded-lg group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" aria-controls="dropdown-settings-mobile" data-collapse-toggle="dropdown-settings-mobile">
-										<i class="fas fa-cog w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-										<span class="flex-1 ms-3 text-left rtl:text-right whitespace-nowrap">Settings</span>
-										<svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
-											<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
-										</svg>
-									</button>
-									<ul id="dropdown-settings-mobile" class="hidden py-2 space-y-2">
-										// <li>
-										// 	<a href="#" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">General (Coming Soon)</a>
-										// </li>
-										<li>
-											<a href="/admin/settings/auth-providers" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-												<i class="fas fa-user-lock w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-												Authentication Providers
-											</a>
-										</li>
-										<li>
-											<a href="/admin/settings/notifications" class="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-												<i class="fas fa-bell w-4 h-4 mr-2 text-gray-500 dark:text-gray-400"></i>
-												Notification Services
-											</a>
-										</li>
-									</ul>
-								}
-							</div>
+					</div>
+					<!-- Mobile drawer -->
+					<div id="mobile-menu" class="fixed top-0 left-0 z-40 h-screen w-72 p-3 overflow-y-auto transition-transform -translate-x-full gm-panel gm-border-r" style="max-width:85vw" tabindex="-1" aria-label="Navigation menu">
+						<div class="flex items-center justify-between h-11 px-1">
+							<a href="/" class="flex items-center gap-2 text-sm font-semibold" style="color:var(--text-1)">
+								<img src="/static/img/logo.png" alt="" class="w-6 h-6"/>
+								GoMFT
+							</a>
+							<button type="button" data-drawer-hide="mobile-menu" class="gm-icon-btn" aria-label="Close navigation menu">
+								<i class="fas fa-times" aria-hidden="true"></i>
+							</button>
+						</div>
+						<nav class="mt-2 space-y-0.5">
+							@navItems(ctx, "-mobile")
 						</nav>
 					</div>
 					<!-- Main Content -->
-					<div class="md:pl-64 flex flex-col flex-1 w-full bg-gray-50 dark:bg-gray-900">
+					<div class="flex flex-col flex-1 w-full min-w-0 pt-14 md:pt-0">
 						<!-- Main header -->
-						<header class="bg-white dark:bg-gray-800 shadow-sm">
-							<div class="flex items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-								<div class="flex items-center space-x-3">
-									// <h1 class="text-lg font-semibold text-gray-900 dark:text-white">{ title }</h1>
-								</div>
-								<!-- Theme toggle and user menu -->
-								<div class="flex items-center space-x-4">
+						<header class="gm-panel gm-border-b sticky top-0 z-10 hidden md:block">
+							<div class="flex items-center justify-between gap-3 px-4 h-14 sm:px-6 lg:px-8">
+								<h1 class="gm-section-title truncate">{ title }</h1>
+								<div class="flex items-center gap-1">
 									<!-- Theme Toggle -->
 									<button
 										id="theme-toggle"
 										type="button"
-										class="p-2 text-gray-500 rounded-lg hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600"
+										class="gm-icon-btn"
+										aria-label="Toggle light and dark theme"
 										onclick="toggleTheme()"
 									>
-										<i class="fas fa-sun hidden dark:block"></i>
-										<i class="fas fa-moon block dark:hidden"></i>
+										<i class="fas fa-sun hidden dark:block" aria-hidden="true"></i>
+										<i class="fas fa-moon block dark:hidden" aria-hidden="true"></i>
 									</button>
 									<!-- Notification Bell -->
 									<div class="relative">
 										<button
 											type="button"
-											class="p-2 text-gray-500 rounded-lg hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600 relative"
+											class="gm-icon-btn relative"
 											id="notification-bell"
+											aria-label="View notifications"
 											data-dropdown-toggle="notification-dropdown"
 											hx-get="/notifications/dropdown"
 											hx-trigger="click once"
 											hx-target="#notification-dropdown-content"
 											data-dropdown-placement="bottom-start"
 										>
-											<span class="sr-only">View notifications</span>
-											<i class="fas fa-bell"></i>
-											<!-- Notification count will be placed here via HTMX -->
+											<i class="fas fa-bell" aria-hidden="true"></i>
 										</button>
-										<!-- Place the notification count container outside but still in the relative container -->
 										<div id="notification-count-container" class="absolute top-0 right-0" hx-get="/notifications/count" hx-trigger="load, notification-updated from:body"></div>
 									</div>
 									<!-- Notification dropdown -->
 									<div
-										class="hidden overflow-hidden z-50 my-4 max-w-sm md:max-w-md w-full text-base list-none bg-white rounded divide-y divide-gray-100 shadow-lg dark:divide-gray-600 dark:bg-gray-700 rounded-xl fixed"
+										class="hidden overflow-hidden z-50 my-2 max-w-sm md:max-w-md w-full list-none gm-card shadow-lg fixed"
 										id="notification-dropdown"
-										style="min-width: 320px; width: 100%;"
+										style="min-width:320px;width:100%;"
 										data-dropdown-placement="bottom-start"
 									>
 										<div id="notification-dropdown-content">
-											<!-- Content will be loaded dynamically via HTMX -->
-											<div class="block py-2 px-4 text-base font-medium text-center text-gray-700 bg-gray-50 dark:bg-gray-600 dark:text-gray-300">
-												Notifications
+											<div class="gm-card-head">
+												<span class="gm-eyebrow">Notifications</span>
 											</div>
-											<div class="py-4 px-4 text-center text-gray-500 dark:text-gray-400">
-												<div class="animate-pulse flex flex-col items-center">
-													<div class="rounded-full bg-gray-200 dark:bg-gray-700 h-12 w-12 mb-2"></div>
-													<div class="h-2 bg-gray-200 dark:bg-gray-700 rounded w-24 mb-4"></div>
-													<div class="h-2 bg-gray-200 dark:bg-gray-700 rounded w-full mb-2"></div>
-													<div class="h-2 bg-gray-200 dark:bg-gray-700 rounded w-full mb-2"></div>
-													<div class="h-2 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+											<div class="py-4 px-4 text-center gm-muted">
+												<div class="animate-pulse flex flex-col items-center gap-2">
+													<div class="h-2 rounded w-24" style="background:var(--surface-2)"></div>
+													<div class="h-2 rounded w-full" style="background:var(--surface-2)"></div>
+													<div class="h-2 rounded w-3/4" style="background:var(--surface-2)"></div>
 												</div>
 											</div>
-											<a href="/notifications" class="block py-2 text-md font-medium text-center text-gray-900 bg-gray-50 hover:bg-gray-100 dark:bg-gray-600 dark:text-white dark:hover:underline">
-												<div class="inline-flex items-center">
-													<svg aria-hidden="true" class="mr-2 w-4 h-4 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-														<path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
-														<path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path>
-													</svg>
-													View all
-												</div>
+											<a href="/notifications" class="block py-2.5 text-center text-sm font-medium gm-border-t" style="color:var(--accent-text)">
+												View all
 											</a>
 										</div>
 									</div>
@@ -409,41 +283,33 @@ templ LayoutWithContext(title string, ctx context.Context) {
 									<div class="relative">
 										<button
 											type="button"
-											class="flex text-sm rounded-full focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600"
+											class="gm-avatar"
 											id="user-menu-button"
+											aria-label="Open user menu"
 											data-dropdown-toggle="user-dropdown"
 											data-dropdown-placement="bottom-end"
 										>
-											<span class="sr-only">Open user menu</span>
-											<div class="h-8 w-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center dark:bg-primary-900 dark:text-primary-300">
-												<span class="text-sm font-medium">{ getUserInitial(ctx) }</span>
-											</div>
+											{ getUserInitial(ctx) }
 										</button>
-										<!-- Dropdown menu -->
 										<div
-											class="z-50 hidden my-4 text-base list-none bg-white divide-y divide-gray-100 rounded-lg shadow dark:bg-gray-700 dark:divide-gray-600"
+											class="z-50 hidden my-2 list-none gm-card shadow-lg"
+											style="min-width:14rem"
 											id="user-dropdown"
 										>
-											<div class="px-4 py-3">
-												<span class="block text-sm text-gray-900 dark:text-white">{ getUserEmail(ctx) }</span>
+											<div class="px-4 py-3 gm-border-b">
+												<span class="block gm-meta truncate">{ getUserEmail(ctx) }</span>
 											</div>
-											<ul class="py-2" aria-labelledby="user-menu-button">
+											<ul class="py-1" aria-labelledby="user-menu-button">
 												<li>
-													<a
-														href="/profile"
-														class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 dark:text-gray-200 dark:hover:text-white"
-													>
-														<i class="fas fa-user-circle mr-2 w-4"></i>
+													<a href="/profile" class="gm-nav-link mx-1">
+														<i class="fas fa-user-circle" aria-hidden="true"></i>
 														Profile
 													</a>
 												</li>
 												<li>
 													<form method="POST" action="/logout">
-														<button
-															type="submit"
-															class="w-full text-left flex items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white"
-														>
-															<i class="fas fa-sign-out-alt mr-2 w-4"></i>
+														<button type="submit" class="gm-nav-link mx-1" style="color:var(--bad);width:calc(100% - 0.5rem)">
+															<i class="fas fa-sign-out-alt" aria-hidden="true"></i>
 															Sign out
 														</button>
 													</form>
@@ -454,91 +320,74 @@ templ LayoutWithContext(title string, ctx context.Context) {
 								</div>
 							</div>
 						</header>
+						<!-- Mobile action bar -->
+						<div class="md:hidden flex items-center justify-between gap-2 px-3 py-2 gm-panel gm-border-b">
+							<h1 class="gm-section-title truncate">{ title }</h1>
+							<div class="flex items-center gap-1">
+								<button type="button" class="gm-icon-btn" aria-label="Toggle light and dark theme" onclick="toggleTheme()">
+									<i class="fas fa-sun hidden dark:block" aria-hidden="true"></i>
+									<i class="fas fa-moon block dark:hidden" aria-hidden="true"></i>
+								</button>
+								<a href="/notifications" class="gm-icon-btn" aria-label="Notifications">
+									<i class="fas fa-bell" aria-hidden="true"></i>
+								</a>
+								<a href="/profile" class="gm-avatar" aria-label="Profile">{ getUserInitial(ctx) }</a>
+							</div>
+						</div>
 						<!-- Toast Container -->
 						@toast.Container()
 						<!-- Page Content -->
-						<main class="flex-1 bg-gray-50 dark:bg-gray-900">
-							<div class="py-6 bg-gray-50 dark:bg-gray-900">
-								<div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
-									<!-- Notification area -->
-									<div id="notification-area" class="hidden" hx-swap-oob="true"></div>
-									{ children... }
-								</div>
+						<main id="main-content" class="flex-1 gm-app" tabindex="-1">
+							<div class="max-w-screen-2xl mx-auto w-full px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+								<div id="notification-area" class="hidden" hx-swap-oob="true"></div>
+								{ children... }
 							</div>
 						</main>
-						<!-- Footer -->
-						<footer class="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-							<div class="max-w-screen-2xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
-								<div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-									<span>GoMFT &copy; { getCurrentYear() }</span>
-									<div class="flex items-center space-x-4">
-										<a href="https://github.com/starfleetcptn/gomft" class="hover:text-primary-600 dark:hover:text-primary-400">
-											<i class="fab fa-github"></i>
-										</a>
-										<a href="https://discord.gg/f9dwtM3j" class="hover:text-primary-600 dark:hover:text-primary-400" target="_blank">
-											<i class="fab fa-discord"></i>
-										</a>
-										<a href={ GetReleaseURL() } class="hover:text-primary-600 dark:hover:text-primary-400">
-											<i class="fas fa-tag"></i> { AppVersion }
-										</a>
-									</div>
-								</div>
-							</div>
-						</footer>
+						@siteFooter()
 					</div>
 				</div>
 			} else {
 				<!-- Public page layout -->
-				<div class="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
-					<main class="flex-grow">
+				<div class="flex flex-col min-h-screen gm-app">
+					<main id="main-content" class="flex-grow" tabindex="-1">
 						{ children... }
 					</main>
-					<footer class="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-						<div class="max-w-screen-2xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
-							<div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-								<span>GoMFT &copy; { getCurrentYear() }</span>
-								<div class="flex items-center space-x-4">
-									<a href="https://github.com/starfleetcptn/gomft" class="hover:text-primary-600 dark:hover:text-primary-400">
-										<i class="fab fa-github"></i>
-									</a>
-									<a href="https://discord.gg/f9dwtM3j" class="hover:text-primary-600 dark:hover:text-primary-400" target="_blank">
-										<i class="fab fa-discord"></i>
-									</a>
-									<a href={ GetReleaseURL() } class="hover:text-primary-600 dark:hover:text-primary-400">
-										<i class="fas fa-tag"></i> { AppVersion }
-									</a>
-								</div>
-							</div>
-						</div>
-					</footer>
+					@siteFooter()
 				</div>
 			}
 			<!-- Scripts -->
-			<!-- Alpine.js and dependencies -->
 			<script defer src="/static/dist/vendor.js"></script>
-			<!-- Shared Scripts -->
 			@toast.ShowToastJS()
-			<!-- Application scripts -->
 			<script defer src="/static/dist/app.js"></script>
 			<script defer src="/static/dist/init.js"></script>
-			<!-- Dropdown fix for mobile -->
 			<script>
 				document.addEventListener("DOMContentLoaded", function() {
-					// Initialize the mobile dropdown separately
-					const mobileDropdownButton = document.querySelector('[data-collapse-toggle="dropdown-settings-mobile"]');
-					const mobileDropdown = document.getElementById("dropdown-settings-mobile");
-					
-					if (mobileDropdownButton && mobileDropdown) {
-						// Show dropdown if on admin pages
-						if (window.location.pathname.startsWith("/admin")) {
-							// Keep it hidden by default, will be toggled by button
-							mobileDropdown.classList.add("hidden");
+					// Mark the active navigation entry (progressive enhancement —
+					// the server does not pass the current path to the layout).
+					var path = window.location.pathname;
+					var best = null, bestLen = 0;
+					document.querySelectorAll('.gm-nav-link[href]').forEach(function(a) {
+						var href = a.getAttribute('href');
+						if (!href || href === '/') return;
+						if (path === href || path.indexOf(href + '/') === 0) {
+							if (href.length > bestLen) { best = a; bestLen = href.length; }
 						}
-						
-						mobileDropdownButton.addEventListener("click", function() {
-							mobileDropdown.classList.toggle("hidden");
-						});
+					});
+					if (best) {
+						best.setAttribute('aria-current', 'page');
+						var group = best.closest('ul[id^="dropdown-settings"]');
+						if (group) group.classList.remove('hidden');
 					}
+
+					// Settings sub-menu toggles (desktop + mobile).
+					document.querySelectorAll('[data-collapse-toggle^="dropdown-settings"]').forEach(function(btn) {
+						btn.addEventListener('click', function() {
+							var target = document.getElementById(btn.getAttribute('data-collapse-toggle'));
+							if (!target) return;
+							var hidden = target.classList.toggle('hidden');
+							btn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+						});
+					});
 				});
 			</script>
 		</body>

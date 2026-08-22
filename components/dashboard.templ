@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"github.com/starfleetcptn/gomft/internal/db"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type DashboardData struct {
@@ -27,7 +29,7 @@ func GetRcloneVersion() string {
 	if err != nil {
 		return "Unknown"
 	}
-	
+
 	// Parse the version from output (typically first line contains "rclone v1.XX.X")
 	outputStr := string(output)
 	lines := strings.Split(outputStr, "\n")
@@ -39,7 +41,7 @@ func GetRcloneVersion() string {
 			}
 		}
 	}
-	
+
 	return "Unknown"
 }
 
@@ -49,12 +51,12 @@ func isNewerVersionAvailable(current, latest string) bool {
 	if current == "" || latest == "" {
 		return false
 	}
-	
+
 	// Special case for DEV versions - always show update available
 	if current == "DEV" {
 		return true
 	}
-	
+
 	// Strip 'v' prefix if present for comparison
 	if strings.HasPrefix(current, "v") {
 		current = current[1:]
@@ -62,23 +64,23 @@ func isNewerVersionAvailable(current, latest string) bool {
 	if strings.HasPrefix(latest, "v") {
 		latest = latest[1:]
 	}
-	
+
 	// Split versions into components
 	currentParts := strings.Split(current, ".")
 	latestParts := strings.Split(latest, ".")
-	
+
 	// Handle non-semver format in either version
 	if len(currentParts) < 2 || len(latestParts) < 2 {
 		// If format doesn't match semver pattern, do string comparison
 		return current != latest && latest != ""
 	}
-	
+
 	// Compare major, minor, patch versions
 	for i := 0; i < len(currentParts) && i < len(latestParts); i++ {
 		// Parse to integers
 		currentNum, err1 := strconv.Atoi(currentParts[i])
 		latestNum, err2 := strconv.Atoi(latestParts[i])
-		
+
 		// If either can't be parsed, do string comparison
 		if err1 != nil || err2 != nil {
 			if currentParts[i] < latestParts[i] {
@@ -88,7 +90,7 @@ func isNewerVersionAvailable(current, latest string) bool {
 			}
 			continue
 		}
-		
+
 		// Compare numbers
 		if latestNum > currentNum {
 			return true
@@ -96,275 +98,351 @@ func isNewerVersionAvailable(current, latest string) bool {
 			return false
 		}
 	}
-	
+
 	// If all components are equal but latest has more components, it's newer
 	return len(latestParts) > len(currentParts)
 }
 
+// --- presentation helpers -------------------------------------------------
+
+// runStatusLabel returns a human label for a JobHistory status. Status is
+// always shown as text plus an icon, never as colour alone.
+func runStatusLabel(status string) string {
+	switch status {
+	case "completed":
+		return "Completed"
+	case "completed_with_errors":
+		return "Completed with errors"
+	case "failed":
+		return "Failed"
+	case "running":
+		return "Running"
+	case "":
+		return "Unknown"
+	}
+	return strings.ToUpper(status[:1]) + status[1:]
+}
+
+func runStatusBadge(status string) string {
+	switch status {
+	case "completed":
+		return "gm-badge gm-badge-ok"
+	case "completed_with_errors":
+		return "gm-badge gm-badge-warn"
+	case "failed":
+		return "gm-badge gm-badge-bad"
+	case "running":
+		return "gm-badge gm-badge-active"
+	}
+	return "gm-badge gm-badge-idle"
+}
+
+func runStatusIcon(status string) string {
+	switch status {
+	case "completed":
+		return "fas fa-circle-check"
+	case "completed_with_errors":
+		return "fas fa-triangle-exclamation"
+	case "failed":
+		return "fas fa-circle-xmark"
+	case "running":
+		return "fas fa-rotate fa-spin"
+	}
+	return "fas fa-circle-question"
+}
+
+// formatDuration renders a run duration compactly with fixed units so the
+// column stays readable when set in tabular figures.
+func formatRunDuration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	if d < time.Second {
+		return fmt.Sprintf("%d ms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1f s", d.Seconds())
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm %02ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh %02dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+func historyDuration(h db.JobHistory) string {
+	if h.EndTime == nil {
+		return "—"
+	}
+	return formatRunDuration(h.EndTime.Sub(h.StartTime))
+}
+
+// relativeTime renders "3m ago" / "in 12m" style deltas.
+func relativeTime(t time.Time) string {
+	d := time.Until(t)
+	future := d > 0
+	if !future {
+		d = -d
+	}
+	var s string
+	switch {
+	case d < time.Minute:
+		s = "less than a minute"
+	case d < time.Hour:
+		s = fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		s = fmt.Sprintf("%dh %02dm", int(d.Hours()), int(d.Minutes())%60)
+	default:
+		s = fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+	if future {
+		return "in " + s
+	}
+	return s + " ago"
+}
+
+// UpcomingRun is a scheduled run derived from the jobs referenced by the
+// recent history the handler already loaded. No extra data is requested from
+// the backend.
+type UpcomingRun struct {
+	JobID    uint
+	Name     string
+	Schedule string
+	NextRun  time.Time
+	Enabled  bool
+}
+
+func upcomingRuns(data DashboardData) []UpcomingRun {
+	seen := make(map[uint]bool)
+	out := make([]UpcomingRun, 0, len(data.RecentJobs))
+	for _, h := range data.RecentJobs {
+		job := h.Job
+		if job.ID == 0 || seen[job.ID] || job.NextRun == nil {
+			continue
+		}
+		seen[job.ID] = true
+		name := job.Name
+		if name == "" {
+			name = job.Config.Name
+		}
+		if name == "" {
+			name = fmt.Sprintf("Job #%d", job.ID)
+		}
+		out = append(out, UpcomingRun{
+			JobID:    job.ID,
+			Name:     name,
+			Schedule: job.Schedule,
+			NextRun:  *job.NextRun,
+			Enabled:  job.GetEnabled(),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].NextRun.Before(out[j].NextRun) })
+	return out
+}
+
 templ Dashboard(ctx context.Context, data DashboardData) {
 	@LayoutWithContext("Dashboard", ctx) {
-		<div id="dashboard-container" style="min-height: 100vh;" class="bg-gray-50 dark:bg-gray-900">
-			<div class="pb-8 w-full">
-				<!-- Page Header -->
-				<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-					<h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
-						<i class="fas fa-chart-pie w-6 h-6 mr-2 text-blue-500 dark:text-blue-400"></i>
-						Dashboard
-					</h1>
-					<div class="bg-white dark:bg-gray-800 p-2 px-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-						<span id="current-date" class="font-medium text-gray-700 dark:text-gray-300"></span>
-						<script>
-							document.getElementById('current-date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-						</script>
+		<div id="dashboard-container" class="pb-mobile-nav">
+			<!-- Job status summary -->
+			<section aria-labelledby="status-heading" class="mb-5">
+				<h2 id="status-heading" class="gm-eyebrow mb-2">Job status</h2>
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+					<div class="gm-stat gm-stat-active">
+						<span class="gm-stat-value num">{ strconv.Itoa(data.ActiveTransfers) }</span>
+						<span class="gm-meta flex items-center gap-1.5">
+							<i class="fas fa-rotate" aria-hidden="true" style="color:var(--accent-text)"></i>
+							Running now
+						</span>
+					</div>
+					<div class="gm-stat gm-stat-ok">
+						<span class="gm-stat-value num">{ strconv.Itoa(data.CompletedToday) }</span>
+						<span class="gm-meta flex items-center gap-1.5">
+							<i class="fas fa-circle-check" aria-hidden="true" style="color:var(--ok)"></i>
+							Completed (last 24h)
+						</span>
+					</div>
+					<div class="gm-stat gm-stat-bad">
+						<span class="gm-stat-value num">{ strconv.Itoa(data.FailedTransfers) }</span>
+						<span class="gm-meta flex items-center gap-1.5">
+							<i class="fas fa-circle-xmark" aria-hidden="true" style="color:var(--bad)"></i>
+							Failed (all time)
+						</span>
 					</div>
 				</div>
-				
-				<!-- Stats Overview Cards -->
-				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-					<!-- Active Transfers -->
-					<div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
-						<div class="flex items-center justify-between mb-4">
-							<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Active Transfers</h3>
-							<div class="inline-flex items-center justify-center w-10 h-10 text-blue-600 bg-blue-100 rounded-lg dark:text-blue-300 dark:bg-blue-900">
-								<i class="fas fa-exchange-alt w-6 h-6 flex items-center justify-center"></i>
-							</div>
-						</div>
-						<div class="flex items-center">
-							<div class="flex-shrink-0">
-								<span class="text-4xl font-bold leading-none text-gray-900 dark:text-white">{ strconv.Itoa(data.ActiveTransfers) }</span>
-							</div>
-							<div class="ml-3 flex items-baseline text-sm font-medium">
-								<span class="text-gray-500 dark:text-gray-400">Currently in progress</span>
-							</div>
-						</div>
+			</section>
+			<div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+				<!-- Last run results -->
+				<section class="gm-card xl:col-span-2 self-start" aria-labelledby="recent-heading">
+					<div class="gm-card-head">
+						<h2 id="recent-heading" class="gm-section-title">Last run results</h2>
+						<a href="/history" class="gm-btn gm-btn-ghost gm-btn-sm">
+							History
+							<i class="fas fa-arrow-right" aria-hidden="true"></i>
+						</a>
 					</div>
-					
-					<!-- Completed Today -->
-					<div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
-						<div class="flex items-center justify-between mb-4">
-							<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Completed Today</h3>
-							<div class="inline-flex items-center justify-center w-10 h-10 text-green-600 bg-green-100 rounded-lg dark:text-green-300 dark:bg-green-900">
-								<i class="fas fa-check-circle w-6 h-6 flex items-center justify-center"></i>
-							</div>
+					if len(data.RecentJobs) == 0 {
+						<div class="gm-card-body text-center py-8">
+							<p class="gm-body mb-1">No runs recorded yet</p>
+							<p class="gm-muted mb-4">Results appear here once a scheduled job has executed.</p>
+							<a href="/jobs/new" class="gm-btn gm-btn-primary">
+								<i class="fas fa-plus" aria-hidden="true"></i>
+								Create your first job
+							</a>
 						</div>
-						<div class="flex items-center">
-							<div class="flex-shrink-0">
-								<span class="text-4xl font-bold leading-none text-gray-900 dark:text-white">{ strconv.Itoa(data.CompletedToday) }</span>
-							</div>
-							<div class="ml-3 flex items-baseline text-sm font-medium">
-								<span class="text-gray-500 dark:text-gray-400">Successfully completed</span>
-							</div>
-						</div>
-					</div>
-					
-					<!-- Failed Transfers -->
-					<div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
-						<div class="flex items-center justify-between mb-4">
-							<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Failed Transfers</h3>
-							<div class="inline-flex items-center justify-center w-10 h-10 text-red-600 bg-red-100 rounded-lg dark:text-red-300 dark:bg-red-900">
-								<i class="fas fa-exclamation-circle w-6 h-6 flex items-center justify-center"></i>
-							</div>
-						</div>
-						<div class="flex items-center">
-							<div class="flex-shrink-0">
-								<span class="text-4xl font-bold leading-none text-gray-900 dark:text-white">{ strconv.Itoa(data.FailedTransfers) }</span>
-							</div>
-							<div class="ml-3 flex items-baseline text-sm font-medium">
-								<span class="text-gray-500 dark:text-gray-400">Require attention</span>
-							</div>
-						</div>
-					</div>
-				</div>
-				
-				<!-- Main Content Area -->
-				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-					<!-- Recent Jobs Card -->
-					<div class="bg-white border border-gray-200 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-800">
-						<div class="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
-							<h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-								<i class="fas fa-history w-6 h-6 mr-2 text-blue-500 dark:text-blue-400 flex-shrink-0"></i>
-								Recent Jobs
-							</h3>
-						</div>
-						<div class="p-4">
-							if len(data.RecentJobs) == 0 {
-								<!-- Empty state with Flowbite styling -->
-								<div class="flex flex-col items-center justify-center py-8 px-4 text-center">
-									<div class="inline-flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 mb-4 dark:bg-gray-700">
-										<i class="fas fa-clipboard-list text-gray-500 dark:text-gray-400 text-3xl"></i>
-									</div>
-									<h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">No recent jobs found</h3>
-									<p class="text-gray-500 dark:text-gray-400 mb-4">Get started by creating your first job.</p>
-									<a href="/jobs/new" class="inline-flex items-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
-										<i class="fas fa-plus w-4 h-4 mr-2"></i>
-										Create your first job
-									</a>
-								</div>
-							} else {
-								<div class="flow-root">
-									<ul class="divide-y divide-gray-200 dark:divide-gray-700">
-										for _, job := range data.RecentJobs {
-											<li class="py-3 sm:py-4 hover:bg-gray-50 dark:hover:bg-gray-700 px-3 rounded-lg transition-colors">
-												<div class="flex items-center">
-													<div class="flex-shrink-0">
-														if job.Status == "completed" {
-															<span class="inline-flex items-center justify-center h-12 w-12 rounded-full text-green-600 bg-green-100 dark:bg-green-900">
-																<i class="fas fa-check-circle w-6 h-6 flex items-center justify-center"></i>
-															</span>
-														} else if job.Status == "failed" {
-															<span class="inline-flex items-center justify-center h-12 w-12 rounded-full text-red-600 bg-red-100 dark:bg-red-900">
-																<i class="fas fa-exclamation-circle w-6 h-6 flex items-center justify-center"></i>
-															</span>
-														} else {
-															<span class="inline-flex items-center justify-center h-12 w-12 rounded-full text-blue-600 bg-blue-100 dark:bg-blue-900">
-																<i class="fas fa-tasks w-6 h-6 flex items-center justify-center"></i>
-															</span>
-														}
-													</div>
-													<div class="flex-1 min-w-0 ms-4">
-														<p class="text-sm font-medium text-gray-900 truncate dark:text-white">
-															{ getConfigNameForHistory(job, data.Configs) }
-														</p>
-														<div class="flex items-center mt-1">
-															<i class="fas fa-clock w-4 h-4 text-gray-500 dark:text-gray-400 mr-1"></i>
-															<p class="text-sm text-gray-500 truncate dark:text-gray-400">
-																Started: { job.StartTime.Format("Jan 02, 2006 15:04:05") }
-															</p>
-														</div>
-													</div>
-													<a href={ templ.SafeURL(fmt.Sprintf("/job-runs/%d", job.ID)) } 
-														class="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-500">
-														View
-														<i class="fas fa-arrow-right w-3 h-3 ms-2"></i>
-													</a>
-												</div>
-											</li>
+					} else {
+						<ul class="gm-rows">
+							for _, run := range data.RecentJobs {
+								<li>
+									<a href={ templ.SafeURL(fmt.Sprintf("/job-runs/%d", run.ID)) } class="gm-row block">
+										<div class="flex items-start justify-between gap-3 mb-1.5">
+											<span class="gm-body font-medium truncate">{ getConfigNameForHistory(run, data.Configs) }</span>
+											<span class={ runStatusBadge(run.Status) }>
+												<i class={ runStatusIcon(run.Status) } aria-hidden="true"></i>
+												{ runStatusLabel(run.Status) }
+											</span>
+										</div>
+										<dl class="gm-kv gm-kv-inline">
+											<dt>Started</dt>
+											<dd data-label="Started" class="num">{ run.StartTime.Format("2006-01-02 15:04:05") }</dd>
+											<dt>Duration</dt>
+											<dd data-label="Duration" class="num">{ historyDuration(run) }</dd>
+											<dt>Transferred</dt>
+											<dd data-label="Transferred" class="num">{ formatBytes(run.BytesTransferred) } / { strconv.Itoa(run.FilesTransferred) } files</dd>
+										</dl>
+										if run.ErrorMessage != "" {
+											<p class="gm-muted mt-1.5 truncate" style="color:var(--bad)">
+												<i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>
+												{ run.ErrorMessage }
+											</p>
 										}
-									</ul>
-								</div>
-								<div class="pt-4 border-t border-gray-200 dark:border-gray-700 mt-4">
-									<a href="/jobs" class="inline-flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700">
-										<i class="fas fa-list w-4 h-4 mr-2"></i>
-										View all jobs
 									</a>
-								</div>
+								</li>
 							}
+						</ul>
+					}
+				</section>
+				<div class="space-y-4">
+					<!-- Next scheduled runs -->
+					<section class="gm-card" aria-labelledby="upcoming-heading">
+						<div class="gm-card-head">
+							<h2 id="upcoming-heading" class="gm-section-title">Next scheduled runs</h2>
+							<a href="/jobs" class="gm-btn gm-btn-ghost gm-btn-sm" aria-label="All scheduled jobs">
+								<i class="fas fa-arrow-right" aria-hidden="true"></i>
+							</a>
 						</div>
-					</div>
-					
-					<!-- Quick Actions Card -->
-					<div class="bg-white border border-gray-200 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-800">
-						<div class="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
-							<h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-								<i class="fas fa-bolt w-6 h-6 mr-2 text-blue-500 dark:text-blue-400 flex-shrink-0"></i>
-								Quick Actions
-							</h3>
-						</div>
-						<div class="p-4 space-y-4">
-							<a href="/configs/new" class="inline-flex items-center justify-center w-full text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">
-								<i class="fas fa-plus w-5 h-5 mr-2"></i>
-								Create New Config
-							</a>
-							<a href="/jobs/new" class="inline-flex items-center justify-center w-full text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">
-								<i class="fas fa-tasks w-5 h-5 mr-2"></i>
-								Create New Job
-							</a>
-							<a href="/history" class="inline-flex items-center justify-center w-full text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-200 font-medium rounded-lg px-5 py-2.5 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-600 dark:focus:ring-gray-700">
-								<i class="fas fa-history w-5 h-5 mr-2"></i>
-								View Transfer History
-							</a>
-							
-							<!-- System Status Card with Flowbite design -->
-							<div class="bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm mt-6">
-								<div class="px-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-t-lg border-b border-gray-200 dark:border-gray-600">
-									<h4 class="text-sm font-medium text-gray-900 dark:text-white">System Status</h4>
-								</div>
-								<div class="px-4 py-3">
-									<div class="space-y-3">
-										<div class="flex items-center justify-between">
-											<span class="text-sm text-gray-700 dark:text-gray-300">Server</span>
-											<span class="bg-green-100 text-green-800 text-xs font-medium inline-flex items-center px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
-												<span class="w-2 h-2 mr-1 bg-green-500 rounded-full"></span>
-												Online
-											</span>
-										</div>
-										<div class="flex items-center justify-between">
-											<span class="text-sm text-gray-700 dark:text-gray-300">Scheduler</span>
-											<span class="bg-green-100 text-green-800 text-xs font-medium inline-flex items-center px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
-												<span class="w-2 h-2 mr-1 bg-green-500 rounded-full"></span>
-												Running
-											</span>
-										</div>
-										<div class="flex items-center justify-between">
-											<span class="text-sm text-gray-700 dark:text-gray-300">Database</span>
-											<span class="bg-green-100 text-green-800 text-xs font-medium inline-flex items-center px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
-												<span class="w-2 h-2 mr-1 bg-green-500 rounded-full"></span>
-												Connected
-											</span>
-										</div>
-										<div class="flex items-center justify-between">
-											<span class="text-sm text-gray-700 dark:text-gray-300">Rclone</span>
-											<span class="bg-blue-100 text-blue-800 text-xs font-medium inline-flex items-center px-2.5 py-0.5 rounded-full dark:bg-blue-900 dark:text-blue-300">
-												<i class="fas fa-terminal w-3 h-3 mr-1"></i>
-												if data.RcloneVersion != "" {
-													{ data.RcloneVersion }
-												} else {
-													Unknown
-												}
-											</span>
-										</div>
-										<div class="flex items-center justify-between">
-											<span class="text-sm text-gray-700 dark:text-gray-300">Application Version</span>
-											if data.CurrentVersion != "" && data.LatestVersion != "" && isNewerVersionAvailable(data.CurrentVersion, data.LatestVersion) {
-												<div class="flex items-center">
-													<span class="bg-yellow-100 text-yellow-800 text-xs font-medium inline-flex items-center px-2.5 py-0.5 rounded-full dark:bg-yellow-900 dark:text-yellow-300 mr-2">
-														<i class="fas fa-exclamation-triangle w-3 h-3 mr-1"></i>
-														{ data.CurrentVersion }
-													</span>
-													<a href={ templ.SafeURL(fmt.Sprintf("https://github.com/starfleetcptn/gomft/releases/tag/%s", data.LatestVersion)) } target="_blank" 
-														class="bg-green-100 text-green-800 text-xs font-medium inline-flex items-center px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800">
-														<i class="fas fa-arrow-circle-up w-3 h-3 mr-1"></i>
-														{ data.LatestVersion } Available
-													</a>
-												</div>
-											} else {
-												<span class="bg-green-100 text-green-800 text-xs font-medium inline-flex items-center px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
-													<i class="fas fa-check-circle w-3 h-3 mr-1"></i>
-													if data.CurrentVersion != "" {
-														{ data.CurrentVersion }
-													} else {
-														Up to date
-													}
-												</span>
-											}
-										</div>
-									</div>
-								</div>
+						if len(upcomingRuns(data)) == 0 {
+							<div class="gm-card-body">
+								<p class="gm-muted">No upcoming run times are known for the jobs seen in recent history.</p>
 							</div>
+						} else {
+							<ul class="gm-rows">
+								for _, up := range upcomingRuns(data) {
+									<li>
+										<a href={ templ.SafeURL(fmt.Sprintf("/jobs/%d", up.JobID)) } class="gm-row block">
+											<div class="flex items-center justify-between gap-2 mb-1">
+												<span class="gm-body font-medium truncate">{ up.Name }</span>
+												if up.Enabled {
+													<span class="gm-badge gm-badge-active">
+														<i class="fas fa-circle-play" aria-hidden="true"></i>
+														Enabled
+													</span>
+												} else {
+													<span class="gm-badge gm-badge-idle">
+														<i class="fas fa-circle-pause" aria-hidden="true"></i>
+														Disabled
+													</span>
+												}
+											</div>
+											<p class="gm-muted num">
+												{ up.NextRun.Format("2006-01-02 15:04") } &middot; { relativeTime(up.NextRun) }
+											</p>
+											<p class="mono" style="color:var(--text-3)">{ up.Schedule }</p>
+										</a>
+									</li>
+								}
+							</ul>
+						}
+					</section>
+					<!-- Quick actions -->
+					<section class="gm-card" aria-labelledby="actions-heading">
+						<div class="gm-card-head">
+							<h2 id="actions-heading" class="gm-section-title">Quick actions</h2>
 						</div>
-					</div>
+						<div class="gm-card-body flex flex-col gap-2">
+							<a href="/configs/new" class="gm-btn gm-btn-primary w-full">
+								<i class="fas fa-plus" aria-hidden="true"></i>
+								New transfer configuration
+							</a>
+							<a href="/jobs/new" class="gm-btn gm-btn-ghost w-full">
+								<i class="fas fa-calendar-plus" aria-hidden="true"></i>
+								New scheduled job
+							</a>
+						</div>
+					</section>
+					<!-- System status -->
+					<section class="gm-card" aria-labelledby="system-heading">
+						<div class="gm-card-head">
+							<h2 id="system-heading" class="gm-section-title">System</h2>
+						</div>
+						<dl class="gm-card-body space-y-2.5">
+							<div class="flex items-center justify-between gap-3">
+								<dt class="gm-meta">Scheduler</dt>
+								<dd>
+									<span class="gm-badge gm-badge-ok">
+										<i class="fas fa-circle-check" aria-hidden="true"></i>
+										Running
+									</span>
+								</dd>
+							</div>
+							<div class="flex items-center justify-between gap-3">
+								<dt class="gm-meta">Database</dt>
+								<dd>
+									<span class="gm-badge gm-badge-ok">
+										<i class="fas fa-circle-check" aria-hidden="true"></i>
+										Connected
+									</span>
+								</dd>
+							</div>
+							<div class="flex items-center justify-between gap-3">
+								<dt class="gm-meta">rclone</dt>
+								<dd class="mono" style="color:var(--text-2)">
+									if data.RcloneVersion != "" {
+										{ data.RcloneVersion }
+									} else {
+										Unknown
+									}
+								</dd>
+							</div>
+							<div class="flex items-center justify-between gap-3">
+								<dt class="gm-meta">GoMFT</dt>
+								<dd>
+									if data.CurrentVersion != "" && data.LatestVersion != "" && isNewerVersionAvailable(data.CurrentVersion, data.LatestVersion) {
+										<div class="flex items-center gap-1.5 flex-wrap justify-end">
+											<span class="mono" style="color:var(--text-2)">{ data.CurrentVersion }</span>
+											<a
+												href={ templ.SafeURL(fmt.Sprintf("https://github.com/starfleetcptn/gomft/releases/tag/%s", data.LatestVersion)) }
+												target="_blank"
+												rel="noopener"
+												class="gm-badge gm-badge-warn"
+											>
+												<i class="fas fa-arrow-up" aria-hidden="true"></i>
+												{ data.LatestVersion } available
+											</a>
+										</div>
+									} else {
+										<span class="mono" style="color:var(--text-2)">
+											if data.CurrentVersion != "" {
+												{ data.CurrentVersion }
+											} else {
+												Up to date
+											}
+										</span>
+									}
+								</dd>
+							</div>
+						</dl>
+					</section>
 				</div>
 			</div>
-			
-			<script>
-				// Set dark background color if in dark mode
-				if (document.documentElement.classList.contains('dark')) {
-					document.getElementById('dashboard-container').style.backgroundColor = '#111827';
-				}
-				
-				// Add event listener for theme changes
-				document.addEventListener('DOMContentLoaded', function() {
-					const themeToggle = document.getElementById('theme-toggle');
-					if (themeToggle) {
-						themeToggle.addEventListener('click', function() {
-							setTimeout(function() {
-								const isDark = document.documentElement.classList.contains('dark');
-								document.getElementById('dashboard-container').style.backgroundColor = isDark ? '#111827' : 'rgb(249, 250, 251)';
-							}, 50);
-						});
-					}
-				});
-			</script>
 		</div>
 	}
 }

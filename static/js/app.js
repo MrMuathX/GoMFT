@@ -6,15 +6,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialize theme based on user preference
 function initializeTheme() {
-  const storedTheme = getCookie('theme');
+  const storedTheme = getCookie('theme') || localStorage.theme;
 
-  if (storedTheme === 'dark') {
-    applyDarkTheme();
+  // Dark-first: dark is the default. Light is only applied when the user
+  // has explicitly asked for it.
+  if (storedTheme === 'light') {
+    applyLightTheme();
   } else if (storedTheme === 'system') {
     applySystemTheme();
   } else {
-    // Default to light theme
-    applyLightTheme();
+    applyDarkTheme();
   }
 
   // Listen for theme changes from system
@@ -88,28 +89,6 @@ function applyDarkTheme() {
   document.documentElement.classList.add('dark');
   document.body.classList.add('dark');
   localStorage.theme = 'dark';
-
-  // Apply dark theme to specific containers
-  const jobsContainer = document.getElementById('jobs-container');
-  const configsContainer = document.getElementById('configs-container');
-
-  if (jobsContainer) {
-    jobsContainer.classList.add('dark');
-    jobsContainer.style.backgroundColor = '#111827';
-  }
-
-  if (configsContainer) {
-    configsContainer.classList.add('dark');
-    configsContainer.style.backgroundColor = '#111827';
-  }
-
-  // Override any white backgrounds in card elements
-  document.querySelectorAll('.bg-white').forEach(function(element) {
-    element.classList.add('dark-mode-override');
-    element.classList.remove('bg-white');
-    element.classList.add('bg-gray-800');
-  });
-
   updateThemeColors('dark');
 }
 
@@ -118,28 +97,6 @@ function applyLightTheme() {
   document.documentElement.classList.remove('dark');
   document.body.classList.remove('dark');
   localStorage.theme = 'light';
-
-  // Remove dark theme from specific containers
-  const jobsContainer = document.getElementById('jobs-container');
-  const configsContainer = document.getElementById('configs-container');
-
-  if (jobsContainer) {
-    jobsContainer.classList.remove('dark');
-    jobsContainer.style.backgroundColor = 'rgb(249, 250, 251)';
-  }
-
-  if (configsContainer) {
-    configsContainer.classList.remove('dark');
-    configsContainer.style.backgroundColor = 'rgb(249, 250, 251)';
-  }
-
-  // Restore white backgrounds
-  document.querySelectorAll('.dark-mode-override').forEach(function(element) {
-    element.classList.remove('dark-mode-override');
-    element.classList.remove('bg-gray-800');
-    element.classList.add('bg-white');
-  });
-
   updateThemeColors('light');
 }
 
@@ -161,43 +118,12 @@ function updateThemeColors(theme) {
   // that might need special handling beyond CSS classes
 
   // For example, updating charts, custom components, etc.
-  if (theme === 'dark') {
-    // Apply dark theme specific changes
-    // Ensure better contrast for text elements
-    const textElements = document.querySelectorAll('.text-gray-700, .text-gray-800, .text-gray-900, .text-secondary-700, .text-secondary-800, .text-secondary-900');
-    textElements.forEach(el => {
-      if (!el.classList.contains('dark:text-white') &&
-          !el.classList.contains('dark:text-gray-100') &&
-          !el.classList.contains('dark:text-gray-200') &&
-          !el.classList.contains('dark:text-secondary-100') &&
-          !el.classList.contains('dark:text-secondary-200')) {
-        el.classList.add('dark:text-secondary-200');
-      }
-    });
-
-    // Ensure better contrast for background elements
-    const bgElements = document.querySelectorAll('.bg-gray-800, .bg-gray-900, .bg-secondary-800, .bg-secondary-900');
-    bgElements.forEach(el => {
-      if (!el.classList.contains('dark:bg-gray-700') &&
-          !el.classList.contains('dark:bg-secondary-700')) {
-        el.classList.add('dark:bg-secondary-700');
-      }
-    });
-
-    // Apply custom animations for dark mode
-    document.body.classList.add('theme-dark-animation');
-    setTimeout(() => {
-      document.body.classList.remove('theme-dark-animation');
-    }, 500);
-  } else {
-    // Apply light theme specific changes
-
-    // Apply custom animations for light mode
-    document.body.classList.add('theme-light-animation');
-    setTimeout(() => {
-      document.body.classList.remove('theme-light-animation');
-    }, 500);
-  }
+  // Colours are driven entirely by CSS custom properties on <html>, so no
+  // per-element class rewriting is needed here any more.
+  updateThemeToggleIcon(theme);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(function(m) {
+    m.setAttribute('content', theme === 'dark' ? '#0f1115' : '#f4f5f7');
+  });
 }
 
 // Update theme toggle icon
@@ -421,11 +347,9 @@ function makeTablesResponsive() {
 
 // Enhance mobile forms
 function enhanceMobileForms() {
-  // Prevent zooming on inputs in iOS
-  const metaViewport = document.querySelector('meta[name=viewport]');
-  if (metaViewport) {
-    metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0');
-  }
+  // NOTE: the viewport is deliberately left zoomable. Inputs are set to 16px
+  // in CSS instead, which stops iOS zoom-on-focus without disabling pinch
+  // zoom (which would be a WCAG 1.4.4 failure).
 
   // Add 'required' visual indicator to required fields
   const requiredInputs = document.querySelectorAll('input[required], select[required], textarea[required]');

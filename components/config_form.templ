@@ -360,21 +360,20 @@ func getInitialData(config *db.TransferConfig) string {
 templ ConfigForm(ctx context.Context, data ConfigFormData) {
 	@LayoutWithContext(getConfigFormTitle(data.IsNew), ctx) {
 		<!-- Main Content -->
-		<section class="py-8 px-4">
-			<div class="mx-auto max-w-3xl">
-				<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 md:p-8">
+		<div class="mx-auto max-w-3xl pb-mobile-nav">
+			<div>
+				<div>
 					<!-- Form Header -->
-					<div class="mb-8 text-center">
-						<div class="flex justify-center mb-4">
-							<span class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900">
-								<i class="fas fa-cog text-blue-600 dark:text-blue-300 text-2xl"></i>
-							</span>
-						</div>
-						<h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+					<div class="mb-4">
+						<a href="/configs" class="gm-muted hover:underline">
+							<i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>
+							Transfer Configurations
+						</a>
+						<h2 class="gm-page-title mt-1">
 							{ getConfigFormTitle(data.IsNew) }
-						</h1>
-						<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-							Configure your file transfer settings using the form below
+						</h2>
+						<p class="gm-muted">
+							Sections can be collapsed; only Identity, Source and Destination are needed for a basic transfer.
 						</p>
 					</div>
 
@@ -448,48 +447,50 @@ templ ConfigForm(ctx context.Context, data ConfigFormData) {
 						>
 						
 						<!-- Form Error Container -->
-						<div id="form-errors" class="hidden p-4 mb-6 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-800/20 dark:text-red-400 border border-red-200 dark:border-red-900" role="alert">
-							<div class="flex items-center mb-2">
-								<i class="fas fa-exclamation-circle text-red-600 dark:text-red-500 mr-2"></i>
-								<h3 class="text-base font-medium text-red-800 dark:text-red-400">Please correct the following errors:</h3>
+						<div id="form-errors" class="hidden p-4 rounded-md gm-meta" style="background:var(--bad-bg);border:1px solid var(--bad-line);color:var(--bad)" role="alert">
+							<div class="flex items-center gap-2 mb-2">
+								<i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+								<h3 class="gm-section-title" style="color:var(--bad)">Please correct the following:</h3>
 							</div>
 							<ul id="error-list" class="ml-5 list-disc space-y-1"></ul>
 						</div>
-						
-						<!-- Configuration Details Section -->
-						<div class="p-4 mb-4 bg-blue-50 border border-blue-100 rounded-lg dark:bg-blue-900/20 dark:border-blue-900">
-							<div class="flex items-center mb-2">
-								<i class="fas fa-info-circle text-blue-600 dark:text-blue-400 mr-2"></i>
-								<h3 class="text-lg font-medium text-blue-600 dark:text-blue-400">Configuration Details</h3>
+
+						<!-- 1. Identity -->
+						<section class="gm-card" aria-labelledby="section-identity">
+							<div class="gm-card-head">
+								<h3 id="section-identity" class="gm-section-title">
+									<i class="fas fa-tag mr-1.5" aria-hidden="true" style="color:var(--text-3)"></i>
+									Identity
+								</h3>
 							</div>
-							<p class="text-sm text-blue-700 dark:text-blue-300">
-								Give your configuration a descriptive name and set up the source and destination locations.
-							</p>
-						</div>
-							
-						<!-- Name field -->
-						<div class="mb-2">
-							<label for="name" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-								Configuration Name <span class="text-red-500">*</span>
-							</label>
-							<input 
-								type="text" 
-								id="name" 
-								name="name" 
-								x-model="name" 
-								required 
-								aria-required="true"
-								class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
-								placeholder="My Transfer Configuration"
-							/>
-							<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose a descriptive name to identify this configuration.</p>
-						</div>
-						
-						<!-- Rclone Command Configuration Section -->
-						<div class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-							<h3 class="mb-4 text-xl font-bold text-gray-900 dark:text-white flex items-center">
-								<i class="fas fa-terminal mr-2 text-blue-500 dark:text-blue-400"></i>Command Configuration
-							</h3>
+							<div class="gm-card-body">
+								<label for="name" class="gm-label">
+									Configuration name <span class="gm-req" aria-hidden="true">*</span>
+								</label>
+								<input
+									type="text"
+									id="name"
+									name="name"
+									x-model="name"
+									required
+									aria-required="true"
+									aria-describedby="name-help"
+									class="gm-input"
+									placeholder="My Transfer Configuration"
+								/>
+								<p id="name-help" class="gm-help">Used to identify this configuration in jobs and history.</p>
+							</div>
+						</section>
+
+						<!-- 2. Command -->
+						<details class="gm-disclose" open>
+							<summary>
+								<i class="fas fa-terminal" aria-hidden="true" style="color:var(--text-3)"></i>
+								Command
+								<span class="gm-muted font-normal">rclone verb and flags</span>
+								<i class="fas fa-chevron-right gm-chev" aria-hidden="true"></i>
+							</summary>
+							<div class="gm-disclose-body">
 							
 							<!-- Additonal Rclone Flags -->
 							@common.RcloneFlags(data.Config.CommandID) // Pass current command ID
@@ -502,31 +503,34 @@ templ ConfigForm(ctx context.Context, data ConfigFormData) {
 								}
 							</div>
 
-							
-						</div>
-						
-						<!-- Source Configuration Section -->
-						<div class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-							<h3 class="mb-4 text-xl font-bold text-gray-900 dark:text-white flex items-center">
-								<i class="fas fa-upload mr-2 text-blue-500 dark:text-blue-400"></i>Source Configuration
-							</h3>
-							
+							</div>
+						</details>
+
+						<!-- 3. Source -->
+						<section class="gm-card" aria-labelledby="section-source">
+							<div class="gm-card-head">
+								<h3 id="section-source" class="gm-section-title">
+									<i class="fas fa-upload mr-1.5" aria-hidden="true" style="color:var(--text-3)"></i>
+									Source
+								</h3>
+								<button
+									type="button"
+									class="gm-btn gm-btn-ghost gm-btn-sm"
+									hx-post="/configs/test-connection"
+									hx-include="closest form"
+									hx-vals='{"providerType": "source"}'
+									hx-swap="none"
+									hx-indicator="#source-test-spinner"
+								>
+									<i class="fas fa-plug" aria-hidden="true"></i>
+									Test source
+									<span id="source-test-spinner" class="htmx-indicator"><i class="fas fa-spinner fa-spin"></i></span>
+								</button>
+							</div>
+							<div class="gm-card-body">
+
 							<!-- Source selection -->
 							@common.SourceSelection()
-							
-              <div class="mt-4">
-                <button type="button"
-                  class="text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-4 py-2 text-center dark:bg-green-500 dark:hover:bg-green-600 dark:focus:ring-green-800"
-                  hx-post="/configs/test-connection"
-                  hx-include="closest form"
-                  hx-vals='{"providerType": "source"}'
-                  hx-swap="none"
-                  hx-indicator="#source-test-spinner">
-                  <i class="fas fa-plug mr-1"></i> Test Source
-                  <span id="source-test-spinner" class="htmx-indicator ml-2"><i class="fas fa-spinner fa-spin"></i></span>
-                </button>
-                <!-- Removed target div, result shown via toast -->
-              </div>
 
 							<!-- Source type specific forms -->
 							<template x-if="sourceType === 'local'">
@@ -580,40 +584,34 @@ templ ConfigForm(ctx context.Context, data ConfigFormData) {
 							<template x-if="sourceType === 'hetzner'">
 								@source.HetznerSourceForm()
 							</template>
-						</div>
-						
-						<!-- File Pattern Section -->
-						<div class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-							<h3 class="mb-4 text-xl font-bold text-gray-900 dark:text-white flex items-center">
-								<i class="fas fa-filter mr-2 text-blue-500 dark:text-blue-400"></i>File Patterns
-							</h3>
-							
-							<!-- File pattern fields -->
-							@common.FilePatternFields()
-						</div>
-						
-						<!-- Destination Configuration Section (only shown if required) -->
-						<div x-show="requiresDestination" x-transition class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-							<h3 class="mb-4 text-xl font-bold text-gray-900 dark:text-white flex items-center">
-								<i class="fas fa-download mr-2 text-blue-500 dark:text-blue-400"></i>Destination Configuration
-							</h3>
-							
+							</div>
+						</section>
+
+						<!-- 4. Destination (hidden for commands that take no destination) -->
+						<section x-show="requiresDestination" x-transition class="gm-card" aria-labelledby="section-destination">
+							<div class="gm-card-head">
+								<h3 id="section-destination" class="gm-section-title">
+									<i class="fas fa-download mr-1.5" aria-hidden="true" style="color:var(--text-3)"></i>
+									Destination
+								</h3>
+								<button
+									type="button"
+									class="gm-btn gm-btn-ghost gm-btn-sm"
+									hx-post="/configs/test-connection"
+									hx-include="closest form"
+									hx-vals='{"providerType": "destination"}'
+									hx-swap="none"
+									hx-indicator="#dest-test-spinner"
+								>
+									<i class="fas fa-plug" aria-hidden="true"></i>
+									Test destination
+									<span id="dest-test-spinner" class="htmx-indicator"><i class="fas fa-spinner fa-spin"></i></span>
+								</button>
+							</div>
+							<div class="gm-card-body">
+
 							<!-- Destination selection -->
 							@common.DestinationSelection()
-							
-              <div class="mt-4">
-                <button type="button"
-                  class="text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-4 py-2 text-center dark:bg-green-500 dark:hover:bg-green-600 dark:focus:ring-green-800"
-                  hx-post="/configs/test-connection"
-                  hx-include="closest form"
-                  hx-vals='{"providerType": "destination"}'
-                  hx-swap="none"
-                  hx-indicator="#dest-test-spinner">
-                  <i class="fas fa-plug mr-1"></i> Test Destination
-                  <span id="dest-test-spinner" class="htmx-indicator ml-2"><i class="fas fa-spinner fa-spin"></i></span>
-                </button>
-                <!-- Removed target div, result shown via toast -->
-              </div>
 
 							<!-- Destination type specific forms -->
 							<template x-if="destinationType === 'local'">
@@ -667,63 +665,53 @@ templ ConfigForm(ctx context.Context, data ConfigFormData) {
 							<template x-if="destinationType === 'hetzner'">
 								@destination.HetznerDestinationForm()
 							</template>
-						</div>
-						
-						<!-- Advanced Options Section -->
-						<div class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-							<h3 class="mb-4 text-xl font-bold text-gray-900 dark:text-white flex items-center">
-								<i class="fas fa-cogs mr-2 text-blue-500 dark:text-blue-400"></i>Advanced Options
-							</h3>
-							
-							<!-- Archive options -->
-							<div class="mb-6">
-								<h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Archive Settings</h4>
+							</div>
+						</section>
+
+						<!-- 5. Filters and patterns -->
+						<details class="gm-disclose">
+							<summary>
+								<i class="fas fa-filter" aria-hidden="true" style="color:var(--text-3)"></i>
+								Filters &amp; patterns
+								<span class="gm-muted font-normal">which files move, and how they are named</span>
+								<i class="fas fa-chevron-right gm-chev" aria-hidden="true"></i>
+							</summary>
+							<div class="gm-disclose-body">
+								@common.FilePatternFields()
+							</div>
+						</details>
+
+						<!-- 6. Advanced -->
+						<details class="gm-disclose">
+							<summary>
+								<i class="fas fa-sliders" aria-hidden="true" style="color:var(--text-3)"></i>
+								Advanced
+								<span class="gm-muted font-normal">archiving and post-transfer handling</span>
+								<i class="fas fa-chevron-right gm-chev" aria-hidden="true"></i>
+							</summary>
+							<div class="gm-disclose-body">
 								@common.ArchiveOptions()
 							</div>
-							
+						</details>
 
-							
-
-						</div>
-						
 						<!-- Form Actions -->
-						<div class="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
-							<a href="/configs" 
-								class="text-white bg-gray-500 hover:bg-gray-600 focus:ring-4 focus:ring-gray-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-gray-600 dark:hover:bg-gray-700 dark:focus:ring-gray-800">
-								<i class="fas fa-arrow-left mr-2"></i>Cancel
+						<div class="flex items-center justify-end gap-2 pt-4 gm-border-t">
+							<a href="/configs" class="gm-btn gm-btn-ghost">
+								Cancel
 							</a>
-							<button 
-								type="submit" 
-								class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
-								<span class="flex items-center">
-									<i class="fas fa-save mr-2"></i>
-									if data.IsNew {
-										Create Configuration
-									} else {
-										Save Changes
-									}
-								</span>
+							<button type="submit" class="gm-btn gm-btn-primary">
+								<i class="fas fa-save" aria-hidden="true"></i>
+								if data.IsNew {
+									Create configuration
+								} else {
+									Save changes
+								}
 							</button>
 						</div>
 					</form>
 				</div>
-				
-				<!-- Help Card -->
-				<div class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-					<div class="flex">
-						<div class="flex-shrink-0">
-							<i class="fas fa-lightbulb text-yellow-400 text-xl"></i>
-						</div>
-						<div class="ml-4">
-							<h5 class="text-sm font-medium text-gray-900 dark:text-white">Configuration Tips</h5>
-							<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-								Configure your file transfer settings carefully for optimal performance. Use file patterns to filter which files are transferred, and consider using archive options to keep track of processed files.
-							</p>
-						</div>
-					</div>
-				</div>
 			</div>
-		</section>
+		</div>
 	}
 }
 

@@ -8,34 +8,38 @@ import (
 
 // Dialog component for confirmation dialogs using Flowbite modal
 templ JobDialog(id string, title string, message string, confirmClass string, confirmText string, action string, jobID uint, jobName string) {
-	<div id={ id } tabindex="-1" aria-hidden="true" class="hidden fixed top-0 right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full">
+	<div id={ id } tabindex="-1" aria-hidden="true" role="dialog" aria-labelledby={ id + "-title" } class="hidden fixed top-0 right-0 left-0 z-50 justify-center items-center w-full max-h-full" style="height:calc(100% - 1rem)">
 		<!-- Backdrop -->
-		<div id={ fmt.Sprintf("%s-backdrop", id) } class="fixed inset-0 bg-gray-900/50 dark:bg-gray-900/80 backdrop-blur-sm"></div>
+		<div id={ fmt.Sprintf("%s-backdrop", id) } class="fixed inset-0" style="background:rgba(6,8,11,.72)"></div>
 		<!-- Modal content -->
 		<div class="relative p-4 w-full max-w-md max-h-full mx-auto">
-			<div class="relative bg-white rounded-lg shadow dark:bg-gray-700">
-				<div class="p-6 text-center">
+			<div class="relative gm-card shadow-xl">
+				<div class="gm-card-body text-center">
 					if action == "delete" {
-						<i class="fas fa-trash-alt text-red-400 text-3xl mb-4"></i>
+						<i class="fas fa-trash-alt text-2xl mb-3" aria-hidden="true" style="color:var(--bad)"></i>
 					} else {
-						<i class="fas fa-exclamation-triangle text-yellow-400 text-3xl mb-4"></i>
+						<i class="fas fa-exclamation-triangle text-2xl mb-3" aria-hidden="true" style="color:var(--warn)"></i>
 					}
-					<h3 class="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">{ message }</h3>
-					<button 
-						type="button" 
-						class={ confirmClass }
-						hx-delete={ fmt.Sprintf("/jobs/%d", jobID) }
-						hx-target="closest li"
-						hx-swap="delete"
-						data-job-name={ jobName }
-						data-job-id={ fmt.Sprint(jobID) }
-						id={ fmt.Sprintf("delete-btn-%d", jobID) }
-						onclick={ triggerJobDelete(id, jobID, jobName) }>
-						{ confirmText }
-					</button>
-					<button type="button" onclick={ closeModal(id) } class="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600">
-						Cancel
-					</button>
+					<h3 id={ id + "-title" } class="gm-section-title mb-1">{ title }</h3>
+					<p class="gm-meta mb-5">{ message }</p>
+					<div class="flex items-center justify-center gap-2">
+						<button type="button" onclick={ closeModal(id) } class="gm-btn gm-btn-ghost">
+							Cancel
+						</button>
+						<button
+							type="button"
+							class={ confirmClass }
+							hx-delete={ fmt.Sprintf("/jobs/%d", jobID) }
+							hx-target="closest li"
+							hx-swap="delete"
+							data-job-name={ jobName }
+							data-job-id={ fmt.Sprint(jobID) }
+							id={ fmt.Sprintf("delete-btn-%d", jobID) }
+							onclick={ triggerJobDelete(id, jobID, jobName) }
+						>
+							{ confirmText }
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -46,10 +50,7 @@ script triggerJobDelete(dialogId string, jobID uint, jobName string) {
 	// Hide the dialog
 	document.getElementById(dialogId).classList.add("hidden");
 	document.getElementById(dialogId).classList.remove("flex");
-	
-	// Add debugging info
-	console.log(`Job deletion triggered for: ${jobName} (ID: ${jobID})`);
-	
+
 	// Store data in a way that's accessible to event handlers
 	window.lastDeletedJob = {
 		id: jobID,
@@ -67,410 +68,132 @@ type JobsData struct {
 
 templ Jobs(ctx context.Context, data JobsData) {
 	@LayoutWithContext("Scheduled Jobs", ctx) {
-		<!-- Status and Error Messages -->
-		<div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
-		
-		<script>
-			// Debug notification system
-			console.log("Jobs template loaded, setting up notification system");
-			
-			// Function to create and show a toast
-			function showToast(message, type) {
-				const toastContainer = document.getElementById('toast-container');
-				
-				// Create toast element
-				const toast = document.createElement('div');
-				toast.id = 'toast-' + type + '-' + Date.now();
-				toast.className = 'flex items-center w-full max-w-xs p-4 mb-4 rounded-lg shadow text-gray-500 bg-white dark:text-gray-400 dark:bg-gray-800 transform translate-y-16 opacity-0 transition-all duration-300 ease-out';
-				toast.role = 'alert';
-				
-				// Set toast content based on type
-				let iconClass, bgColorClass, textColorClass;
-				
-				if (type === 'success') {
-					iconClass = 'text-green-500 bg-green-100 dark:bg-green-800 dark:text-green-200';
-					bgColorClass = 'text-green-500 dark:text-green-200';
-					textColorClass = 'text-green-500 dark:text-green-200';
-				} else if (type === 'error') {
-					iconClass = 'text-red-500 bg-red-100 dark:bg-red-800 dark:text-red-200';
-					bgColorClass = 'text-red-500 dark:text-red-200';
-					textColorClass = 'text-red-500 dark:text-red-200';
-				} else {
-					iconClass = 'text-blue-500 bg-blue-100 dark:bg-blue-800 dark:text-blue-200';
-					bgColorClass = 'text-blue-500 dark:text-blue-200';
-					textColorClass = 'text-blue-500 dark:text-blue-200';
-				}
-				
-				// Set inner HTML with appropriate icon and message
-				toast.innerHTML = `
-					<div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 rounded-lg ${iconClass}">
-						${type === 'success' 
-							? '<i class="fas fa-check"></i>' 
-							: type === 'error' 
-							? '<i class="fas fa-exclamation-circle"></i>'
-							: '<i class="fas fa-info-circle"></i>'}
-					</div>
-					<div class="ml-3 text-sm font-normal">${message}</div>
-					<button type="button" class="ml-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700" data-dismiss-target="#${toast.id}" aria-label="Close">
-						<span class="sr-only">Close</span>
-						<i class="fas fa-times"></i>
-					</button>
-				`;
-				
-				// Add toast to container
-				toastContainer.appendChild(toast);
-				
-				// Trigger animation after a small delay to ensure the DOM has updated
-				setTimeout(() => {
-					toast.classList.remove('translate-y-16', 'opacity-0');
-					toast.classList.add('translate-y-0', 'opacity-100');
-				}, 10);
-				
-				// Add event listener to close button
-				const closeButton = toast.querySelector('button[data-dismiss-target]');
-				closeButton.addEventListener('click', function() {
-					// Animate out before removing
-					toast.classList.add('opacity-0', 'translate-y-4');
-					setTimeout(() => {
-						toast.remove();
-					}, 300);
-				});
-				
-				// Auto-remove toast after 5 seconds
-				setTimeout(() => {
-					toast.classList.add('opacity-0', 'translate-y-4');
-					setTimeout(() => {
-						toast.remove();
-					}, 300);
-				}, 5000);
-			}
-			
-			// Global function to handle job running
-			window.runJob = function(button) {
-				// Get job data from button attributes
-				const jobId = button.getAttribute('data-job-id');
-				const jobName = button.getAttribute('data-job-name') || `Job #${jobId}`;
-				
-				console.log(`Run job clicked for: ${jobName} (ID: ${jobId})`);
-				
-				// No loading notification - just listen for the response
-				button.addEventListener('htmx:afterRequest', function(event) {
-					console.log("Run job request completed:", event.detail);
-					if (event.detail.successful) {
-						let displayName = jobName;
-						// Try to extract job name from response headers
-						if (event.detail.headers && event.detail.headers['HX-Job-Name']) {
-							displayName = event.detail.headers['HX-Job-Name'];
-						}
-						console.log(`Showing success notification for job: ${displayName}`);
-						showToast(`Job "${displayName}" started successfully!`, 'success');
-					} else {
-						let errorMsg = `Failed to start job "${jobName}"`;
-						if (event.detail.xhr && event.detail.xhr.responseText) {
-							errorMsg = `Error: ${event.detail.xhr.responseText}`;
-						}
-						console.log(`Showing error notification: ${errorMsg}`);
-						showToast(errorMsg, 'error');
-					}
-				}, { once: true });
-			};
-
-			// Handle modal hide buttons
-			document.addEventListener('DOMContentLoaded', function() {
-				const hideButtons = document.querySelectorAll('[data-modal-hide]');
-				hideButtons.forEach(button => {
-					button.addEventListener('click', function() {
-						const modalId = this.getAttribute('data-modal-hide');
-						const modal = document.getElementById(modalId);
-						modal.classList.add('hidden');
-						modal.classList.remove('flex');
-					});
-				});
-			});
-
-			// Track all HTMX events for debugging
-			document.addEventListener('htmx:beforeRequest', function(event) {				
-				// Check if this is a DELETE request by examining the URL and method
-				const path = event.detail.path;
-				const method = event.detail.verb;
-				
-				console.log(`Request path: ${path}, method: ${method}`);
-				
-				// Pattern match for job deletions (e.g., /jobs/123)
-				if (path && method === 'DELETE' && path.match(/^\/jobs\/\d+$/)) {
-					console.log("Detected job deletion request via URL pattern");
-					
-					// This is definitely a delete request - store this information
-					window.isJobDeleteRequest = true;
-				}
-			});
-
-			// Track HTMX after-request events for job deletion
-			document.addEventListener('htmx:afterRequest', function(event) {				
-				// Check for job deletion multiple ways
-				const isDeleteRequest = 
-					// Check global flag from the triggerJobDelete function
-					window.currentlyDeletingJob ||
-					// Check flag from beforeRequest handler
-					window.isJobDeleteRequest ||
-					// Check URL pattern directly from this event
-					(event.detail.pathInfo && event.detail.pathInfo.requestPath && 
-					 event.detail.pathInfo.requestPath.match(/^\/jobs\/\d+$/) && 
-					 event.detail.verb === 'DELETE');
-				
-				console.log(`Is delete request: ${isDeleteRequest}`);
-				
-				// If this is a successful delete request, show notification
-				if (isDeleteRequest && event.detail.successful) {
-					console.log("Delete request was successful");
-					
-					let jobName = "Unknown";
-					
-					// Try multiple sources for job name
-					if (event.detail.elt && event.detail.elt.getAttribute) {
-						jobName = event.detail.elt.getAttribute('data-job-name') || jobName;
-					}
-					
-					if (jobName === "Unknown" && window.lastDeletedJob) {
-						// Fallback to our stored job info
-						jobName = window.lastDeletedJob.name;
-					}
-					
-					console.log(`Showing success notification for deleted job: ${jobName}`);
-					showToast(`Job "${jobName}" deleted successfully`, 'success');
-					
-					// Clear flags
-					window.currentlyDeletingJob = false;
-					window.isJobDeleteRequest = false;
-					window.lastDeletedJob = null;
-				}
-			});
-			
-			// Track HTMX error events for job deletion
-			document.addEventListener('htmx:responseError', function(event) {
-				console.log("HTMX response error:", event.detail);
-				
-				// Similar logic as success but for errors
-				const isDeleteRequest = 
-					window.currentlyDeletingJob ||
-					window.isJobDeleteRequest ||
-					(event.detail.pathInfo && event.detail.pathInfo.requestPath && 
-					 event.detail.pathInfo.requestPath.match(/^\/jobs\/\d+$/) && 
-					 event.detail.verb === 'DELETE');
-				
-				if (isDeleteRequest) {
-					console.log("Delete request failed");
-					
-					let jobName = "Unknown";
-					
-					// Try multiple sources for job name
-					if (event.detail.elt && event.detail.elt.getAttribute) {
-						jobName = event.detail.elt.getAttribute('data-job-name') || jobName;
-					}
-					
-					if (jobName === "Unknown" && window.lastDeletedJob) {
-						// Fallback to our stored job info
-						jobName = window.lastDeletedJob.name;
-					}
-					
-					let errorMsg = `Failed to delete job "${jobName}"`;
-					
-					if (event.detail.xhr && event.detail.xhr.responseText) {
-						errorMsg = `Error: ${event.detail.xhr.responseText}`;
-					}
-					
-					console.log(`Showing error notification: ${errorMsg}`);
-					showToast(errorMsg, 'error');
-					
-					// Clear flags
-					window.currentlyDeletingJob = false;
-					window.isJobDeleteRequest = false;
-					window.lastDeletedJob = null;
-				}
-			});
-		</script>
-		
-		<div id="jobs-container" style="min-height: 100vh; background-color: rgb(249, 250, 251);" class="jobs-page bg-gray-50 dark:bg-gray-900">
-			<div class="pb-8 w-full">
-				<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-					<h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
-						<i class="fas fa-calendar-alt w-6 h-6 mr-2 text-blue-500 dark:text-blue-400"></i>
-						Scheduled Jobs
-					</h1>
-					<a href="/jobs/new" class="flex items-center justify-center text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">
-						<i class="fas fa-plus w-4 h-4 mr-2"></i>
-						New Job
+		@jobsPageScript()
+		<div id="jobs-container" class="jobs-page pb-mobile-nav">
+			<div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+				<div>
+					<h2 class="gm-page-title">Scheduled Jobs</h2>
+					<p class="gm-muted">Cron-scheduled runs of one or more transfer configurations.</p>
+				</div>
+				<a href="/jobs/new" class="gm-btn gm-btn-primary">
+					<i class="fas fa-plus" aria-hidden="true"></i>
+					New job
+				</a>
+			</div>
+			if len(data.Jobs) == 0 {
+				<div class="gm-card gm-card-body text-center py-10">
+					<p class="gm-body mb-1">No jobs yet</p>
+					<p class="gm-muted mb-4">A job binds a schedule to one or more transfer configurations.</p>
+					<a href="/jobs/new" class="gm-btn gm-btn-primary inline-flex">
+						<i class="fas fa-plus" aria-hidden="true"></i>
+						Create first job
 					</a>
 				</div>
-				<div class="mt-6">
-					if len(data.Jobs) == 0 {
-						<div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-12 flex flex-col items-center justify-center text-center">
-							<div class="inline-block p-4 rounded-full bg-gray-100 dark:bg-gray-700 mb-4">
-								<i class="fas fa-list text-3xl text-gray-400 dark:text-gray-500"></i>
-							</div>
-							<h3 class="mt-2 text-lg font-medium text-gray-900 dark:text-white">No jobs</h3>
-							<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Get started by creating a new transfer job.</p>
-							<div class="mt-6">
-								<a href="/jobs/new" class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">
-									<i class="fas fa-plus mr-2"></i>
-									New Job
-								</a>
-							</div>
-						</div>
-					} else {
-						<div class="bg-white dark:bg-gray-800 shadow-md sm:rounded-lg overflow-hidden">
-							<div class="relative overflow-x-auto">
-								<ul role="list" class="divide-y divide-gray-200 dark:divide-gray-700">
-									for _, job := range data.Jobs {
-										<li>
-											<div class="block hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-												<div class="px-4 py-4 sm:px-6">
-													<div class="flex items-center justify-between">
-														<div class="flex items-center">
-															<p class="text-sm font-medium text-blue-600 dark:text-blue-400 truncate">
-																if job.Name != "" {
-																	{ job.Name }
-																} else {
-																	{ job.Config.Name }
-																}
-															</p>
-															if job.GetEnabled() {
-																<span class="inline-flex items-center bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300 ml-2">
-																	<i class="fas fa-circle-check text-green-500 dark:text-green-400 mr-1"></i>
-																	Active
-																</span>
-															} else {
-																<span class="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-gray-700 dark:text-gray-300 ml-2">
-																	<i class="fas fa-circle-xmark text-gray-500 dark:text-gray-400 mr-1"></i>
-																	Inactive
-																</span>
-															}
-														</div>
-														<div class="ml-2 flex-shrink-0 flex space-x-2">
-															<button 
-																hx-post={ fmt.Sprintf("/jobs/%d/run", job.ID) }
-																hx-swap="none"
-																class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-xs px-3 py-1.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800"
-																data-job-id={ fmt.Sprint(job.ID) }
-																data-job-name={ job.Name }
-																onclick="window.runJob(this)">
-																<i class="fas fa-play mr-1"></i>
-																Run Now
-															</button>
-															<a href={ templ.SafeURL(fmt.Sprintf("/jobs/%d", job.ID)) } class="py-1.5 px-3 text-xs font-medium text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700">
-																<i class="fas fa-pen-to-square mr-1"></i>
-																Edit
-															</a>
-															<button 
-																hx-post={ fmt.Sprintf("/jobs/%d/duplicate", job.ID) }
-																hx-swap="innerHTML"
-																hx-target="body"
-																class="text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:ring-4 focus:outline-none focus:ring-indigo-300 font-medium rounded-lg text-xs px-3 py-1.5 text-center inline-flex items-center dark:bg-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-600 dark:focus:ring-indigo-800"
-																data-job-id={ fmt.Sprint(job.ID) }
-																data-job-name={ job.Name }>
-																<i class="fas fa-clone mr-1"></i>
-																Duplicate
-															</button>
-															<!-- Add delete dialog for each job -->
-															@JobDialog(
-																fmt.Sprintf("delete-job-dialog-%d", job.ID),
-																"Delete Job",
-																fmt.Sprintf("Are you sure you want to delete the job '%s'? This cannot be undone.", determineJobName(job)),
-																"text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-red-600 dark:hover:bg-red-700 focus:outline-none dark:focus:ring-red-800",
-																"Delete",
-																"delete",
-																job.ID,
-																determineJobName(job),
-															)
-															<button 
-																type="button"
-																onclick={ showModal(fmt.Sprintf("delete-job-dialog-%d", job.ID)) }
-																class="focus:outline-none text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:ring-red-300 font-medium rounded-lg text-xs px-3 py-1.5 dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-900">
-																<i class="fas fa-trash mr-1"></i>
-																Delete
-															</button>
-														</div>
-													</div>
-													<div class="mt-2 sm:flex sm:justify-between">
-														<div class="sm:flex flex-wrap">
-															<p class="flex items-center text-sm text-gray-500 dark:text-gray-400">
-																<i class="fas fa-gear text-gray-400 dark:text-gray-500 mr-1.5"></i>
-																Configs: 
-																<span class="ml-1">
-																	if count, ok := data.ConfigCount[job.ID]; ok && count > 1 {
-																		{ fmt.Sprintf("%d configurations", count) }
-																	} else if job.ConfigID > 0 {
-																		{ job.Config.Name }
-																	} else {
-																		{ "None" }
-																	}
-																</span>
-															</p>
-															<p class="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400 sm:mt-0 sm:ml-6">
-																<i class="fas fa-calendar text-gray-400 dark:text-gray-500 mr-1.5"></i>
-																Schedule: { job.Schedule }
-															</p>
-															if job.LastRun != nil {
-																<p class="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400 sm:mt-0 sm:ml-6">
-																	<i class="fas fa-clock text-gray-400 dark:text-gray-500 mr-1.5"></i>
-																	Last Run: { job.LastRun.Format("2006-01-02 15:04:05") }
-																</p>
-															}
-														</div>
-														if job.NextRun != nil {
-															<div class="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400 sm:mt-0">
-																<i class="fas fa-hourglass-start text-gray-400 dark:text-gray-500 mr-1.5"></i>
-																<p>
-																	Next Run: { job.NextRun.Format("2006-01-02 15:04:05") }
-																</p>
-															</div>
-														}
-													</div>
-												</div>
-											</div>
-										</li>
-									}
-								</ul>
-							</div>
-						</div>
-					}
+			} else {
+				<div class="gm-card overflow-hidden">
+					<ul role="list" class="gm-rows">
+						for _, job := range data.Jobs {
+							<li>
+								<div class="gm-row">
+									<div class="flex flex-wrap items-center gap-2 mb-2">
+										<a href={ templ.SafeURL(fmt.Sprintf("/jobs/%d", job.ID)) } class="gm-body font-medium truncate" style="color:var(--accent-text)">
+											{ determineJobName(job) }
+										</a>
+										if job.GetEnabled() {
+											<span class="gm-badge gm-badge-ok">
+												<i class="fas fa-circle-check" aria-hidden="true"></i>
+												Enabled
+											</span>
+										} else {
+											<span class="gm-badge gm-badge-idle">
+												<i class="fas fa-circle-pause" aria-hidden="true"></i>
+												Disabled
+											</span>
+										}
+									</div>
+									<dl class="gm-kv mb-3">
+										<dt>Schedule</dt>
+										<dd><span class="mono">{ job.Schedule }</span></dd>
+										<dt>Configs</dt>
+										<dd>
+											if count, ok := data.ConfigCount[job.ID]; ok && count > 1 {
+												{ fmt.Sprintf("%d configurations", count) }
+											} else if job.ConfigID > 0 {
+												{ job.Config.Name }
+											} else {
+												{ "None" }
+											}
+										</dd>
+										if job.LastRun != nil {
+											<dt>Last run</dt>
+											<dd class="num">{ job.LastRun.Format("2006-01-02 15:04:05") }</dd>
+										}
+										if job.NextRun != nil {
+											<dt>Next run</dt>
+											<dd class="num">
+												{ job.NextRun.Format("2006-01-02 15:04:05") }
+												<span style="color:var(--text-3)">&middot; { relativeTime(*job.NextRun) }</span>
+											</dd>
+										}
+									</dl>
+									<div class="gm-actions">
+										<button
+											hx-post={ fmt.Sprintf("/jobs/%d/run", job.ID) }
+											hx-swap="none"
+											class="gm-btn gm-btn-primary gm-btn-sm"
+											data-job-id={ fmt.Sprint(job.ID) }
+											data-job-name={ job.Name }
+											onclick="window.runJob(this)"
+										>
+											<i class="fas fa-play" aria-hidden="true"></i>
+											Run now
+										</button>
+										<a href={ templ.SafeURL(fmt.Sprintf("/jobs/%d", job.ID)) } class="gm-btn gm-btn-ghost gm-btn-sm">
+											<i class="fas fa-pen-to-square" aria-hidden="true"></i>
+											Edit
+										</a>
+										<button
+											hx-post={ fmt.Sprintf("/jobs/%d/duplicate", job.ID) }
+											hx-swap="innerHTML"
+											hx-target="body"
+											class="gm-btn gm-btn-ghost gm-btn-sm"
+											data-job-id={ fmt.Sprint(job.ID) }
+											data-job-name={ job.Name }
+										>
+											<i class="fas fa-clone" aria-hidden="true"></i>
+											Duplicate
+										</button>
+										@JobDialog(
+											fmt.Sprintf("delete-job-dialog-%d", job.ID),
+											"Delete job",
+											fmt.Sprintf("Are you sure you want to delete '%s'? This cannot be undone.", determineJobName(job)),
+											"gm-btn gm-btn-danger",
+											"Delete",
+											"delete",
+											job.ID,
+											determineJobName(job),
+										)
+										<button
+											type="button"
+											onclick={ showModal(fmt.Sprintf("delete-job-dialog-%d", job.ID)) }
+											class="gm-btn gm-btn-danger gm-btn-sm"
+											aria-label={ "Delete job " + determineJobName(job) }
+										>
+											<i class="fas fa-trash" aria-hidden="true"></i>
+											Delete
+										</button>
+									</div>
+								</div>
+							</li>
+						}
+					</ul>
 				</div>
-				
-				<!-- Help Notice -->
-				<div class="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
-					<div class="flex">
-						<div class="flex-shrink-0">
-							<i class="fas fa-info-circle text-blue-400 dark:text-blue-400"></i>
-						</div>
-						<div class="ml-3">
-							<p class="text-sm text-blue-700 dark:text-blue-400">
-								Transfer jobs run according to their schedule and transfer files between configured sources and destinations
-							</p>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-		
-		<script>
-			// Set dark background color if in dark mode
-			if (document.documentElement.classList.contains('dark')) {
-				document.getElementById('jobs-container').style.backgroundColor = '#111827';
 			}
-			
-			// Add event listener for theme changes
-			document.addEventListener('DOMContentLoaded', function() {
-				const themeToggle = document.getElementById('theme-toggle');
-				if (themeToggle) {
-					themeToggle.addEventListener('click', function() {
-						setTimeout(function() {
-							const isDark = document.documentElement.classList.contains('dark');
-							document.getElementById('jobs-container').style.backgroundColor = isDark ? '#111827' : 'rgb(249, 250, 251)';
-						}, 50);
-					});
-				}
-			});
-		</script>
+			<p class="gm-muted mt-4">
+				<i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+				Jobs run on their cron schedule and transfer files between the configured source and destination.
+			</p>
+		</div>
 	}
 }
 
@@ -480,4 +203,159 @@ func determineJobName(job db.Job) string {
 		return job.Name
 	}
 	return job.Config.Name
+}
+
+// jobsPageScript preserves the page's existing toast + HTMX bookkeeping.
+templ jobsPageScript() {
+	<script>
+		function showToast(message, type) {
+			const toastContainer = document.getElementById('toast-container');
+			if (!toastContainer) return;
+
+			const toast = document.createElement('div');
+			toast.id = 'toast-' + type + '-' + Date.now();
+			toast.className = 'gm-card flex items-center gap-3 w-full max-w-xs p-3 mb-2 shadow-lg transform translate-y-4 opacity-0 transition-all duration-300 ease-out';
+			toast.role = 'alert';
+
+			let iconClass, icon;
+			if (type === 'success') {
+				iconClass = 'gm-badge gm-badge-ok';
+				icon = '<i class="fas fa-circle-check"></i>';
+			} else if (type === 'error') {
+				iconClass = 'gm-badge gm-badge-bad';
+				icon = '<i class="fas fa-circle-xmark"></i>';
+			} else {
+				iconClass = 'gm-badge gm-badge-active';
+				icon = '<i class="fas fa-circle-info"></i>';
+			}
+
+			toast.innerHTML = `
+				<span class="${iconClass}">${icon}</span>
+				<div class="gm-meta flex-1">${message}</div>
+				<button type="button" class="gm-icon-btn" data-dismiss-target="#${toast.id}" aria-label="Dismiss notification">
+					<i class="fas fa-times"></i>
+				</button>
+			`;
+
+			toastContainer.appendChild(toast);
+
+			setTimeout(() => {
+				toast.classList.remove('translate-y-4', 'opacity-0');
+			}, 10);
+
+			toast.querySelector('button[data-dismiss-target]').addEventListener('click', function() {
+				toast.classList.add('opacity-0', 'translate-y-4');
+				setTimeout(() => { toast.remove(); }, 300);
+			});
+
+			setTimeout(() => {
+				toast.classList.add('opacity-0', 'translate-y-4');
+				setTimeout(() => { toast.remove(); }, 300);
+			}, 5000);
+		}
+
+		// Global function to handle job running
+		window.runJob = function(button) {
+			const jobId = button.getAttribute('data-job-id');
+			const jobName = button.getAttribute('data-job-name') || `Job #${jobId}`;
+
+			button.addEventListener('htmx:afterRequest', function(event) {
+				if (event.detail.successful) {
+					let displayName = jobName;
+					if (event.detail.headers && event.detail.headers['HX-Job-Name']) {
+						displayName = event.detail.headers['HX-Job-Name'];
+					}
+					showToast(`Job "${displayName}" started successfully!`, 'success');
+				} else {
+					let errorMsg = `Failed to start job "${jobName}"`;
+					if (event.detail.xhr && event.detail.xhr.responseText) {
+						errorMsg = `Error: ${event.detail.xhr.responseText}`;
+					}
+					showToast(errorMsg, 'error');
+				}
+			}, { once: true });
+		};
+
+		document.addEventListener('DOMContentLoaded', function() {
+			const hideButtons = document.querySelectorAll('[data-modal-hide]');
+			hideButtons.forEach(button => {
+				button.addEventListener('click', function() {
+					const modalId = this.getAttribute('data-modal-hide');
+					const modal = document.getElementById(modalId);
+					if (!modal) return;
+					modal.classList.add('hidden');
+					modal.classList.remove('flex');
+				});
+			});
+		});
+
+		document.addEventListener('htmx:beforeRequest', function(event) {
+			const path = event.detail.path;
+			const method = event.detail.verb;
+
+			if (path && method === 'DELETE' && path.match(/^\/jobs\/\d+$/)) {
+				window.isJobDeleteRequest = true;
+			}
+		});
+
+		document.addEventListener('htmx:afterRequest', function(event) {
+			const isDeleteRequest =
+				window.currentlyDeletingJob ||
+				window.isJobDeleteRequest ||
+				(event.detail.pathInfo && event.detail.pathInfo.requestPath &&
+				 event.detail.pathInfo.requestPath.match(/^\/jobs\/\d+$/) &&
+				 event.detail.verb === 'DELETE');
+
+			if (isDeleteRequest && event.detail.successful) {
+				let jobName = "Unknown";
+
+				if (event.detail.elt && event.detail.elt.getAttribute) {
+					jobName = event.detail.elt.getAttribute('data-job-name') || jobName;
+				}
+
+				if (jobName === "Unknown" && window.lastDeletedJob) {
+					jobName = window.lastDeletedJob.name;
+				}
+
+				showToast(`Job "${jobName}" deleted successfully`, 'success');
+
+				window.currentlyDeletingJob = false;
+				window.isJobDeleteRequest = false;
+				window.lastDeletedJob = null;
+			}
+		});
+
+		document.addEventListener('htmx:responseError', function(event) {
+			const isDeleteRequest =
+				window.currentlyDeletingJob ||
+				window.isJobDeleteRequest ||
+				(event.detail.pathInfo && event.detail.pathInfo.requestPath &&
+				 event.detail.pathInfo.requestPath.match(/^\/jobs\/\d+$/) &&
+				 event.detail.verb === 'DELETE');
+
+			if (isDeleteRequest) {
+				let jobName = "Unknown";
+
+				if (event.detail.elt && event.detail.elt.getAttribute) {
+					jobName = event.detail.elt.getAttribute('data-job-name') || jobName;
+				}
+
+				if (jobName === "Unknown" && window.lastDeletedJob) {
+					jobName = window.lastDeletedJob.name;
+				}
+
+				let errorMsg = `Failed to delete job "${jobName}"`;
+
+				if (event.detail.xhr && event.detail.xhr.responseText) {
+					errorMsg = `Error: ${event.detail.xhr.responseText}`;
+				}
+
+				showToast(errorMsg, 'error');
+
+				window.currentlyDeletingJob = false;
+				window.isJobDeleteRequest = false;
+				window.lastDeletedJob = null;
+			}
+		});
+	</script>
 }

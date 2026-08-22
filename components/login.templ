@@ -7,135 +7,121 @@ import (
 
 templ Login(ctx context.Context, errorMessage string, hasExternalProviders bool) {
 	@LayoutWithContext("Login", ctx) {
-		<div class="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900">
-			<div class="max-w-md w-full space-y-8">
-				<div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-8">
-					<div class="text-center mb-8">
-						<div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900">
-							<i class="fas fa-lock text-primary-600 dark:text-primary-400 text-3xl"></i>
-						</div>
-						<h2 class="text-3xl font-bold text-gray-900 dark:text-white">Sign In</h2>
-						<p class="mt-2 text-gray-600 dark:text-gray-300">Access your GoMFT account</p>
+		<div class="flex items-center justify-center py-10 px-4 gm-safe-x" style="min-height:calc(100vh - 4rem)">
+			<div class="w-full max-w-sm">
+				<div class="flex items-center gap-2.5 mb-5">
+					<img src="/static/img/logo.png" alt="" class="w-8 h-8"/>
+					<div>
+						<p class="gm-page-title leading-6">GoMFT</p>
+						<p class="gm-muted">Managed file transfer</p>
 					</div>
-					
-					if errorMessage != "" {
-						if strings.HasPrefix(errorMessage, "Password reset") || strings.Contains(errorMessage, "success") {
-							<div class="mb-6 flex items-center rounded-lg bg-green-50 p-4 text-green-800 dark:bg-gray-800 dark:text-green-400" role="alert">
-								<i class="fas fa-check-circle mr-2"></i>
-								<span class="[&:not(:first-child)]:ms-2">{ errorMessage }</span>
-							</div>
-						} else {
-							<div class="mb-6 flex items-center rounded-lg bg-red-50 p-4 text-red-800 dark:bg-gray-800 dark:text-red-400" role="alert">
-								<i class="fas fa-exclamation-circle mr-2"></i>
-								<span class="[&:not(:first-child)]:ms-2">{ errorMessage }</span>
-							</div>
-						}
-					}
-					
-					<form 
-						class="space-y-6" 
-						method="POST"
-						action="/login"
-						x-data="{ 
-							email: '', 
-							password: '',
-							loading: false,
-							validate() {
-								return this.email && this.password;
+				</div>
+				<div class="gm-card">
+					<div class="gm-card-body">
+						<h1 class="gm-section-title mb-1">Sign in</h1>
+						<p class="gm-muted mb-5">Use your GoMFT account to continue.</p>
+						if errorMessage != "" {
+							if strings.HasPrefix(errorMessage, "Password reset") || strings.Contains(errorMessage, "success") {
+								<div class="mb-4 flex items-start gap-2 rounded-md p-3" style="background:var(--ok-bg);border:1px solid var(--ok-line);color:var(--ok)" role="status">
+									<i class="fas fa-check-circle mt-0.5" aria-hidden="true"></i>
+									<span class="text-sm">{ errorMessage }</span>
+								</div>
+							} else {
+								<div class="mb-4 flex items-start gap-2 rounded-md p-3" style="background:var(--bad-bg);border:1px solid var(--bad-line);color:var(--bad)" role="alert">
+									<i class="fas fa-exclamation-circle mt-0.5" aria-hidden="true"></i>
+									<span class="text-sm">{ errorMessage }</span>
+								</div>
 							}
-						}">
-						<div class="space-y-4">
+						}
+						<form
+							class="space-y-4"
+							method="POST"
+							action="/login"
+							x-data="{ 
+								email: '', 
+								password: '',
+								loading: false,
+								validate() {
+									return this.email && this.password;
+								}
+							}"
+						>
 							<div>
-								<label for="email" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Email address</label>
-								<div class="relative">
-									<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-										<i class="fas fa-envelope text-gray-500 dark:text-gray-400"></i>
-									</div>
-									<input 
-										id="email" 
-										name="email" 
-										type="email" 
-										required 
-										x-model="email"
-										class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 pl-10 text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-primary-500 dark:focus:ring-primary-500" 
-										placeholder="you@example.com"/>
-								</div>
+								<label for="email" class="gm-label">Email address</label>
+								<input
+									id="email"
+									name="email"
+									type="email"
+									autocomplete="username"
+									required
+									x-model="email"
+									class="gm-input"
+									placeholder="you@example.com"
+								/>
 							</div>
 							<div>
-								<label for="password" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Password</label>
-								<div class="relative">
-									<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-										<i class="fas fa-key text-gray-500 dark:text-gray-400"></i>
-									</div>
-									<input 
-										id="password" 
-										name="password" 
-										type="password" 
-										required 
-										x-model="password"
-										class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 pl-10 text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-primary-500 dark:focus:ring-primary-500" 
-										placeholder="••••••••"/>
+								<div class="flex items-baseline justify-between">
+									<label for="password" class="gm-label">Password</label>
+									<a href="/forgot-password" class="gm-muted hover:underline" style="color:var(--accent-text)">Forgot password?</a>
 								</div>
+								<input
+									id="password"
+									name="password"
+									type="password"
+									autocomplete="current-password"
+									required
+									x-model="password"
+									class="gm-input"
+									placeholder="••••••••"
+								/>
 							</div>
-						</div>
-
-						<div class="flex items-center justify-between">
-							<div class="flex items-center">
-								<input 
-									id="remember-me" 
-									name="remember-me" 
-									type="checkbox" 
-									class="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-600 focus:ring-2 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800"/>
-								<label for="remember-me" class="ms-2 text-sm text-gray-900 dark:text-gray-300">Remember me</label>
+							<div class="flex items-center gap-2">
+								<input
+									id="remember-me"
+									name="remember-me"
+									type="checkbox"
+									class="w-4 h-4 rounded"
+									style="accent-color:var(--accent-ring)"
+								/>
+								<label for="remember-me" class="gm-meta">Keep me signed in</label>
 							</div>
-							<a href="/forgot-password" class="text-sm font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">Forgot password?</a>
-						</div>
-
-						<button 
-							type="submit" 
-							class="w-full rounded-lg bg-primary-600 px-5 py-3 text-center text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800"
-							x-bind:disabled="!validate()"
-							@click="loading = true">
-							<span x-show="!loading" class="flex items-center justify-center">
-								<i class="fas fa-sign-in-alt mr-2"></i>
-								Sign in
-							</span>
-							<span x-show="loading" class="flex items-center justify-center">
-								<svg class="me-3 h-5 w-5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-								</svg>
-								Processing...
-							</span>
-						</button>
-					</form>
-					
-					<div class="mt-6 border-t border-gray-200 px-8 py-4 text-center dark:border-gray-700">
-						<p class="text-sm text-gray-600 dark:text-gray-300 mb-3">
-							<i class="fas fa-info-circle mr-1"></i>
-							Contact an administrator to create an account
-						</p>
-						
+							<button
+								type="submit"
+								class="gm-btn gm-btn-primary w-full"
+								x-bind:disabled="!validate()"
+								x-bind:class="!validate() ? 'opacity-50 cursor-not-allowed' : ''"
+								@click="loading = true"
+							>
+								<span x-show="!loading" class="flex items-center gap-2">
+									<i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+									Sign in
+								</span>
+								<span x-show="loading" x-cloak class="flex items-center gap-2">
+									<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+									Signing in…
+								</span>
+							</button>
+						</form>
 						if hasExternalProviders {
-							<!-- External Authentication Providers -->
-							<div id="external-auth-providers" class="mt-4">
-								<p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Or sign in with:</p>
+							<div id="external-auth-providers" class="mt-5 pt-5 gm-border-t">
+								<p class="gm-eyebrow mb-2.5">Or continue with</p>
 								<div id="provider-buttons" class="flex flex-col gap-2" hx-get="/auth/providers" hx-trigger="load" hx-target="#provider-buttons">
-									<div class="animate-pulse flex justify-center">
-										<div class="h-10 bg-gray-200 rounded w-full max-w-[200px] dark:bg-gray-700"></div>
-									</div>
+									<div class="h-10 rounded animate-pulse" style="background:var(--surface-2)"></div>
 								</div>
 							</div>
 						}
 					</div>
-				</div>
-				
-				<div class="text-center">
-					<div class="inline-flex items-center text-sm text-gray-600 dark:text-gray-400">
-						<i class="fas fa-shield-alt mr-2 text-primary-500"></i>
-						<span>Secure, encrypted connection</span>
+					<div class="px-4 py-3 gm-border-t">
+						<p class="gm-muted">
+							<i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+							Contact an administrator to create an account.
+						</p>
 					</div>
 				</div>
+				<p class="mt-4 gm-muted flex items-center gap-2">
+					<i class="fas fa-shield-alt" aria-hidden="true" style="color:var(--accent-text)"></i>
+					Secure, encrypted connection
+				</p>
 			</div>
 		</div>
 	}
