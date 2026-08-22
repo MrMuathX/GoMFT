@@ -7,6 +7,14 @@ This fork starts from upstream [StarFleetCPTN/GoMFT](https://github.com/StarFlee
 ## [Unreleased]
 
 ### Added
+- `DeployToServer.ps1` — one-command deploy to a CasaOS host over SSH. Packs the
+  working tree, builds the image on the host, and registers the stack through
+  `casaos-cli` so GoMFT appears on the CasaOS dashboard. Re-running updates in
+  place. Database, backups and secrets live in host bind mounts under
+  `/DATA/AppData/gomft`, so a rebuild never loses a job. `JWT_SECRET` and
+  `TOTP_ENCRYPTION_KEY` are generated once on the host and mounted read-only at
+  `/app/.env` — without them GoMFT silently falls back to its hardcoded
+  development keys.
 - `ARCHITECTURE.md` — map of routes, Templ components, the scheduler and rclone
   invocation, written to support the redesign work.
 - Dark-first design system in `static/css/app.css` (layered slate surfaces, a
