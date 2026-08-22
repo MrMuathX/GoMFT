@@ -8,6 +8,9 @@ COPY package.json package-lock.json ./
 COPY build.js ./
 COPY static/ ./static/
 COPY tailwind.config.js ./
+# Tailwind scans .templ sources for class names. Without this the content glob
+# matches nothing and the image ships a stylesheet with almost no utilities.
+COPY components/ ./components/
 
 # Debug: Show the contents of build.js
 RUN echo "Contents of build.js:" && cat build.js
