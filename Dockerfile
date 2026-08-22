@@ -44,7 +44,9 @@ ARG TARGETVARIANT=""
 RUN apk add --no-cache git build-base
 
 # Install templ compiler
-RUN go install github.com/a-h/templ/cmd/templ@latest
+# Pinned to the templ version in go.mod. `@latest` broke the build:
+# templ >= v0.3.1020 requires Go >= 1.25, this stage is golang:1.24.
+RUN go install github.com/a-h/templ/cmd/templ@v0.3.857
 
 # Copy go module files first for better layer caching
 COPY go.mod go.sum ./
