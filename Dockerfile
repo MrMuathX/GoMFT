@@ -27,7 +27,7 @@ RUN npm ci && \
     head -n 10 static/dist/app.css
 
 # Go build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -44,8 +44,8 @@ ARG TARGETVARIANT=""
 RUN apk add --no-cache git build-base
 
 # Install templ compiler
-# Pinned to the templ version in go.mod. `@latest` broke the build:
-# templ >= v0.3.1020 requires Go >= 1.25, this stage is golang:1.24.
+# Pinned to the templ version in go.mod so the CLI and the runtime library
+# cannot drift apart (`@latest` previously broke the build outright).
 RUN go install github.com/a-h/templ/cmd/templ@v0.3.857
 
 # Copy go module files first for better layer caching
