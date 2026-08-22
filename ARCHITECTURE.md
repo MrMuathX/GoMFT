@@ -137,3 +137,25 @@ Coupling that makes redesign risky:
 - `internal/config/config.go` was not read in depth in this pass — default values for `DataDir`, `ServerAddress`, etc. are asserted only insofar as they're referenced in `main.go`; the config file itself should be checked before relying on specific defaults.
 - `tailwind.config.js` content (theme customization, `primary-*` color scale) was not opened; only its CLI usage in `build.js` was confirmed.
 - The full remainder of `config_handlers.go` (past line ~160) and `transfer_executor.go` (past line ~1000, `HandleUpdateConfig`/tail of `executeSimpleCommand`) was not read line-by-line; behavior described for those functions is based on the portions actually read.
+
+---
+
+## Known issue: cron field-count mismatch (deferred)
+
+`internal/scheduler` registers **5-field** cron expressions (`10 * * * *`), but
+`scheduler_test.go` expects **6-field** expressions with a leading seconds column
+(`0 10 * * * *`). Three tests fail as a result:
+
+- `TestNewScheduler_LoadJobs`
+- `TestScheduleJob_Success`
+- `TestScheduleJob_InvalidCron`
+
+`TestScheduleJob_InvalidCron` also shows that `ScheduleJob` returns no error when
+given an invalid cron expression, so bad schedules fail silently at registration.
+
+This is unresolved on purpose. `robfig/cron/v3` parses 5-field expressions by
+default and needs `cron.WithSeconds()` (or `cron.NewParser`) for 6-field ones, so
+the fix is a decision about intended scheduling semantics, not a test tweak:
+either the scheduler should opt into seconds precision, or the tests should drop
+the seconds column. Whichever way it goes, existing stored schedules must be
+checked for compatibility before changing the parser.

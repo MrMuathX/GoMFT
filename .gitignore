@@ -82,3 +82,6 @@ docs/static/js/
 docs/node_modules/
 docs/.env*
 docs/*.log
+# local screenshot harness
+.shots/
+

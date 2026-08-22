@@ -20,6 +20,62 @@ GoMFT is a web-based managed file transfer application built with Go, leveraging
 
 ---
 
+## About this fork
+
+This is a fork of [StarFleetCPTN/GoMFT](https://github.com/StarFleetCPTN/GoMFT), which was
+archived in September 2025 at v0.2.11. It is maintained for self-hosted LAN use.
+
+**What differs from upstream:**
+
+- **The Docker build works again.** Upstream's build had bit-rotted: it installed
+  `templ@latest` (which now requires Go >= 1.25 and fails on the Go 1.24 builder),
+  and its frontend stage never copied `components/`, so Tailwind's content glob
+  matched nothing and the image shipped a stylesheet with almost no utility classes.
+- **rclone is pinned** (`ARG RCLONE_VERSION`, currently v1.75.0) instead of tracking
+  `rclone-current`, so rebuilds are reproducible.
+- **Redesigned front-end** — dark-first, mobile-friendly, reworked dashboard and
+  transfer-config form. Same stack: Templ + HTMX + Tailwind.
+- **Security patch** for [GO-2026-5970](https://pkg.go.dev/vuln/GO-2026-5970);
+  `govulncheck ./...` is clean.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full list, including known issues, and
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for a map of the codebase.
+
+> [!NOTE]
+> The screenshots below are upstream's and predate the redesign.
+
+### Building this fork
+
+Requires Docker. From the repository root:
+
+```bash
+docker compose up -d --build
+```
+
+The UI is then on `http://localhost:8080`; the default login is
+`admin@example.com` / `admin` — change it immediately.
+
+To pin a different rclone release:
+
+```bash
+docker compose build --build-arg RCLONE_VERSION=v1.75.0
+```
+
+For local (non-Docker) development you need Go 1.25+, Node 20+, and the `templ`
+CLI **at the version in `go.mod`** — do not use `@latest`:
+
+```bash
+go install github.com/a-h/templ/cmd/templ@v0.3.857
+templ generate && go build ./...
+```
+
+> [!IMPORTANT]
+> On Windows, clone with LF endings intact. `.gitattributes` enforces this — a CRLF
+> `entrypoint.sh` makes the container fail to start with
+> `exec /entrypoint.sh: no such file or directory`.
+
+---
+
 ## Screenshots
 
 <table>
