@@ -76,7 +76,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags "-X github.com/starfleetcptn/gomft/components.AppVersion=${VERSION} -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.Commit=${COMMIT} -X github.com/starfleetcptn/gomft/components.BuildTime=${BUILD_TIME} -X github.com/starfleetcptn/gomft/components.Commit=${COMMIT}" \
     -o /app/gomft
 
-# Install rclone with appropriate architecture
+# Install rclone. Pinned for reproducible builds (was `rclone-current`,
+# which silently changed the bundled version on every rebuild).
+ARG RCLONE_VERSION=v1.75.0
 RUN apk add --no-cache curl unzip && \
     if [ "$TARGETARCH" = "arm64" ]; then \
         RCLONE_ARCH="arm64"; \
@@ -85,8 +87,8 @@ RUN apk add --no-cache curl unzip && \
     else \
         RCLONE_ARCH="amd64"; \
     fi && \
-    curl -O https://downloads.rclone.org/rclone-current-linux-${RCLONE_ARCH}.zip && \
-    unzip rclone-current-linux-${RCLONE_ARCH}.zip && \
+    curl -fsSLO https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}.zip && \
+    unzip rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}.zip && \
     cd rclone-*-linux-${RCLONE_ARCH} && \
     cp rclone /usr/local/bin/ && \
     chmod 755 /usr/local/bin/rclone && \
