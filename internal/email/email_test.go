@@ -109,7 +109,9 @@ func TestGenerateTestEmailHTML(t *testing.T) {
 	assert.Contains(t, htmlContent, testMessage)
 	assert.Contains(t, htmlContent, fmt.Sprintf("%s:%d", cfg.Email.Host, cfg.Email.Port))
 	assert.Contains(t, htmlContent, cfg.Email.FromEmail)
-	assert.Contains(t, htmlContent, testCurrentTime)
+	// html/template escapes "+" in the timezone offset as "&#43;", so compare
+	// against the escaped form rather than the raw timestamp.
+	assert.Contains(t, htmlContent, strings.ReplaceAll(testCurrentTime, "+", "&#43;"))
 	assert.Contains(t, htmlContent, fmt.Sprintf("&copy; %d %s", testYear, testAppName))
 }
 

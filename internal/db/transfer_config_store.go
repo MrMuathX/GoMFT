@@ -228,7 +228,7 @@ func (db *DB) GenerateRcloneConfig(config *TransferConfig) error {
 			if len(output) > 0 {
 				errorMsg += fmt.Sprintf("\nOutput: %s", output)
 			}
-			return fmt.Errorf(errorMsg)
+			return fmt.Errorf("%s", errorMsg)
 		}
 	case "local":
 		// For local source, ensure the section exists but might not need specific rclone config create
@@ -380,7 +380,7 @@ func (db *DB) GenerateRcloneConfig(config *TransferConfig) error {
 			if len(output) > 0 {
 				errorMsg += fmt.Sprintf("\nOutput: %s", output)
 			}
-			return fmt.Errorf(errorMsg)
+			return fmt.Errorf("%s", errorMsg)
 		}
 	case "local":
 		// Append local config section

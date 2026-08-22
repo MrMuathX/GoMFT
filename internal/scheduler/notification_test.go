@@ -146,7 +146,7 @@ func createTestNotificationService(id uint, name, svcType string, enabled bool, 
 		ID:            id,
 		Name:          name,
 		Type:          svcType,
-		IsEnabled:     enabled, // Corrected field name
+		IsEnabled:     &enabled, // db.NotificationService.IsEnabled is *bool
 		EventTriggers: triggers,
 		Config:        config,
 		// Initialize other fields as needed for tests, e.g., RetryPolicy
@@ -160,7 +160,7 @@ func TestSendJobWebhookNotification(t *testing.T) {
 	logger, logBuf := newTestLogger(LogLevelDebug)
 	defer logger.Close()
 	mockDB := &mockNotificationDB{} // Not used directly by this function, but Notifier needs it
-	notifier := NewNotifier(mockDB, logger)
+	notifier := NewNotifier(mockDB, logger, false)
 
 	var receivedPayload map[string]interface{}
 	var receivedHeaders http.Header
@@ -249,7 +249,7 @@ func TestSendGlobalNotifications_Webhook(t *testing.T) {
 		if enabledOnly {
 			var enabledServices []db.NotificationService
 			for _, s := range allServices {
-				if s.IsEnabled { // Use IsEnabled field
+				if s.IsEnabled != nil && *s.IsEnabled { // IsEnabled is *bool
 					enabledServices = append(enabledServices, s)
 				}
 			}
@@ -271,7 +271,7 @@ func TestSendGlobalNotifications_Webhook(t *testing.T) {
 		return nil
 	}
 
-	notifier := NewNotifier(mockDB, logger)
+	notifier := NewNotifier(mockDB, logger, false)
 
 	job := createTestJob(10, false, "", false, false) // Job-specific webhook disabled
 	history := createTestHistory(100, 10, "completed", "")
